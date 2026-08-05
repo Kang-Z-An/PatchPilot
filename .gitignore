@@ -9,3 +9,4 @@ build/
 .env.*
 !.env.example
 benchmarks/results/
+logs/

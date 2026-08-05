@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "dataset": "princeton-nlp/SWE-bench_Verified",
+  "split": "test",
+  "name": "patchpilot-pilot-v1",
+  "purpose": "A small multi-repository integration and capability benchmark.",
+  "selection_policy": {
+    "repository_count": 8,
+    "instances_per_repository": 1,
+    "fail_to_pass_tests_per_instance": "1-2",
+    "excluded_instances": [
+      "sympy__sympy-20590"
+    ],
+    "notes": "Selected before running PatchPilot on these instances. The existing SymPy development instance is excluded because it was used to tune the agent."
+  },
+  "instances": [
+    {
+      "instance_id": "sympy__sympy-16886",
+      "repository": "sympy/sympy",
+      "category": "data_mapping"
+    },
+    {
+      "instance_id": "sphinx-doc__sphinx-9698",
+      "repository": "sphinx-doc/sphinx",
+      "category": "index_formatting"
+    },
+    {
+      "instance_id": "matplotlib__matplotlib-13989",
+      "repository": "matplotlib/matplotlib",
+      "category": "numeric_boundary"
+    },
+    {
+      "instance_id": "scikit-learn__scikit-learn-14141",
+      "repository": "scikit-learn/scikit-learn",
+      "category": "dependency_reporting"
+    },
+    {
+      "instance_id": "pydata__xarray-4629",
+      "repository": "pydata/xarray",
+      "category": "data_mutability"
+    },
+    {
+      "instance_id": "pytest-dev__pytest-5262",
+      "repository": "pytest-dev/pytest",
+      "category": "io_wrapper_metadata"
+    },
+    {
+      "instance_id": "pylint-dev__pylint-4970",
+      "repository": "pylint-dev/pylint",
+      "category": "configuration_boundary"
+    },
+    {
+      "instance_id": "psf__requests-5414",
+      "repository": "psf/requests",
+      "category": "exception_normalization"
+    }
+  ]
+}
