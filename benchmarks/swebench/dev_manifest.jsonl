@@ -1,0 +1,1 @@
+{"schema_version":1,"instance_id":"sympy__sympy-20590","instance_file":"sympy__sympy-20590.json","docker_image":"sweb.eval.x86_64.sympy__sympy-20590:latest","test_command":"python -c 'from sympy import Symbol; assert not hasattr(Symbol(\"s\"), \"__dict__\")'","max_steps":25,"timeout":180,"enabled":true}

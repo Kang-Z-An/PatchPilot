@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import tempfile
 import unittest
@@ -59,6 +60,32 @@ class RepositoryToolsTest(unittest.TestCase):
         result = self.tools.execute("apply_patch", {"patch": malicious})
         self.assertFalse(result.ok)
         self.assertIn("Unsafe patch path", result.output)
+
+    def test_inspect_python_class_traces_slots_through_ancestors(self) -> None:
+        (self.root / "hierarchy.py").write_text(
+            "class Printable:\n"
+            "    pass\n\n"
+            "class Basic(Printable):\n"
+            "    __slots__ = ()\n\n"
+            "class Symbol(Basic):\n"
+            "    __slots__ = ('name',)\n",
+            encoding="utf-8",
+        )
+
+        result = self.tools.execute(
+            "inspect_python_class",
+            {"class_name": "Symbol", "max_depth": 4},
+        )
+
+        self.assertTrue(result.ok, result.output)
+        payload = json.loads(result.output)
+        symbol = payload["definitions"][0]
+        basic = symbol["bases"][0]["definitions"][0]
+        printable = basic["bases"][0]["definitions"][0]
+        self.assertTrue(symbol["declares_slots"])
+        self.assertTrue(basic["declares_slots"])
+        self.assertFalse(printable["declares_slots"])
+        self.assertEqual(printable["path"], "hierarchy.py")
 
     def test_replace_text_requires_one_exact_match(self) -> None:
         result = self.tools.execute(

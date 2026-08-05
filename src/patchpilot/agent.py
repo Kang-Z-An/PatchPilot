@@ -12,7 +12,9 @@ from .types import Model, ToolResult
 
 SYSTEM_PROMPT = """You are PatchPilot, a code-repair agent. Fix the reported issue in the repository.
 
-You have at most __MAX_STEPS__ model turns. Work incrementally: inspect relevant files, reproduce the issue early with run_tests when useful, form a concrete hypothesis, make the smallest justified edit, then run tests. Reserve enough turns for an edit, run_tests, git_diff, and the final response. When the remaining budget is low, stop broad exploration and act on the best-supported hypothesis.
+You have at most __MAX_STEPS__ model turns. Work incrementally: search exact identifiers from the issue first, inspect their definitions and direct base classes, reproduce the issue early with run_tests when useful, form a concrete hypothesis, make the smallest justified edit, then run tests. For Python inheritance, MRO, or __slots__ issues, use inspect_python_class before manually tracing parent classes. Do not repeat equivalent searches. Reserve enough turns for an edit, run_tests, git_diff, and the final response.
+
+The first edit-attempt deadline is turn __EDIT_DEADLINE__. Beginning with that turn, if you have not attempted an edit, only replace_text or apply_patch will be accepted. At most __MAX_INSPECTION_STREAK__ consecutive inspection calls are accepted before an edit attempt. Treat these as hard limits: act on the best-supported hypothesis instead of trying another broad search.
 
 Prefer replace_text for a small exact edit. Use apply_patch for multi-file or structurally complex changes. Do not claim success without both a passing run_tests result and a successful git_diff after the latest edit.
 
@@ -101,25 +103,37 @@ class Agent:
         self.tools = tools
         self.trajectory_dir = trajectory_dir
         self.max_steps = max_steps
+        self.edit_deadline = max(1, min(max_steps - 3, (max_steps * 3 + 4) // 5))
+        self.max_inspection_streak = max(1, min(8, self.edit_deadline - 1))
 
     def run(self, issue: str) -> AgentResult:
         writer = TrajectoryWriter(
             self.trajectory_dir,
-            {"issue": issue, "repository": str(self.tools.root), "max_steps": self.max_steps},
+            {
+                "issue": issue,
+                "repository": str(self.tools.root),
+                "max_steps": self.max_steps,
+                "edit_deadline": self.edit_deadline,
+                "max_inspection_streak": self.max_inspection_streak,
+            },
         )
         messages = [
             {
                 "role": "system",
                 "content": SYSTEM_PROMPT.replace(
                     "__TOOLS__", self.tools.prompt_description()
-                ).replace("__MAX_STEPS__", str(self.max_steps)),
+                )
+                .replace("__MAX_STEPS__", str(self.max_steps))
+                .replace("__EDIT_DEADLINE__", str(self.edit_deadline))
+                .replace("__MAX_INSPECTION_STREAK__", str(self.max_inspection_streak)),
             },
             {
                 "role": "user",
                 "content": (
                     f"Issue:\n{issue}\n\n"
                     f"Step budget: {self.max_steps} total turns. "
-                    "Keep enough turns to edit, test, inspect the diff, and finish."
+                    f"Make the first edit attempt before turn {self.edit_deadline}; "
+                    "keep enough turns to test, inspect the diff, and finish."
                 ),
             },
         ]
@@ -141,6 +155,7 @@ class Agent:
             "budget_blocked_actions": 0,
             "automatic_git_diff_calls": 0,
         }
+        consecutive_inspections = 0
         for step in range(1, self.max_steps + 1):
             raw = self.model.complete(messages)
             writer.record("model_output", step=step, raw=raw)
@@ -190,15 +205,29 @@ class Agent:
 
             name = action["tool"]
             arguments = action["arguments"]
-            restriction = self._budget_restriction(name, patch_applied, step)
+            restriction = self._budget_restriction(
+                name,
+                patch_applied,
+                counters["edit_attempts"] > 0,
+                step,
+                consecutive_inspections,
+            )
             if restriction is None:
                 result = self.tools.execute(name, arguments)
             else:
                 result = ToolResult(False, restriction)
                 counters["budget_blocked_actions"] += 1
             counters["tool_calls"] += 1
-            if name in {"list_files", "search_code", "read_file"}:
+            if name in {
+                "list_files",
+                "search_code",
+                "read_file",
+                "inspect_python_class",
+            }:
                 counters["inspection_calls"] += 1
+                consecutive_inspections += 1
+            else:
+                consecutive_inspections = 0
             if not result.ok:
                 counters["tool_failures"] += 1
             if name in {"apply_patch", "replace_text"}:
@@ -229,12 +258,17 @@ class Agent:
                         "edit_applied": patch_applied,
                         "tests_passed_after_latest_edit": tests_passed,
                         "diff_inspected_after_latest_edit": diff_inspected,
+                        "edit_deadline": self.edit_deadline,
+                        "consecutive_inspections": consecutive_inspections,
                     },
                     "next_priority": self._next_priority(
                         patch_applied,
+                        counters["edit_attempts"] > 0,
                         tests_passed,
                         diff_inspected,
                         remaining,
+                        step,
+                        self.edit_deadline,
                     ),
                 },
                 ensure_ascii=False,
@@ -266,11 +300,43 @@ class Agent:
         self,
         tool_name: str,
         patch_applied: bool,
+        edit_attempted: bool,
         step: int,
+        consecutive_inspections: int,
     ) -> str | None:
         if patch_applied:
             return None
         turns_including_current = self.max_steps - step + 1
+        edit_tools = {"apply_patch", "replace_text"}
+        inspection_tools = {
+            "list_files",
+            "search_code",
+            "read_file",
+            "inspect_python_class",
+        }
+        if step >= self.edit_deadline and not edit_attempted and tool_name not in edit_tools:
+            return (
+                f"Action blocked: turn {self.edit_deadline} is the first edit-attempt "
+                "deadline. Use replace_text or apply_patch now with the best-supported fix."
+            )
+        if step >= self.edit_deadline and edit_attempted and tool_name in {
+            "list_files",
+            "search_code",
+            "inspect_python_class",
+        }:
+            return (
+                "Action blocked after the edit deadline: broad discovery is closed. "
+                "Use one focused read_file only if needed to correct an edit, then edit again."
+            )
+        if (
+            not edit_attempted
+            and tool_name in inspection_tools
+            and consecutive_inspections >= self.max_inspection_streak
+        ):
+            return (
+                "Action blocked: the consecutive inspection limit was reached. Form a "
+                "concrete hypothesis and make the smallest defensible edit now."
+            )
         if turns_including_current <= 4 and tool_name in {
             "list_files",
             "search_code",
@@ -291,10 +357,18 @@ class Agent:
     @staticmethod
     def _next_priority(
         patch_applied: bool,
+        edit_attempted: bool,
         tests_passed: bool,
         diff_inspected: bool,
         steps_remaining: int,
+        step: int,
+        edit_deadline: int,
     ) -> str:
+        if not patch_applied and not edit_attempted and step + 1 >= edit_deadline:
+            return (
+                "The first edit-attempt deadline is now. Make the smallest defensible "
+                "replace_text or apply_patch edit next."
+            )
         if not patch_applied and steps_remaining <= 4:
             return (
                 "Budget critical: stop broad inspection. Make the smallest defensible "

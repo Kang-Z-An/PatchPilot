@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ast
+import json
 import os
 import re
 import shlex
@@ -31,6 +33,11 @@ class RepositoryTools:
         ToolSpec("search_code", "Search text in repository files.", '{"query":"text","path":"optional/subdir","max_results":50}'),
         ToolSpec("read_file", "Read a line range from a UTF-8 text file.", '{"path":"file.py","start_line":1,"end_line":200}'),
         ToolSpec(
+            "inspect_python_class",
+            "Statically find a Python class and trace its base classes, definition locations, and __slots__ declarations.",
+            '{"class_name":"Symbol","path":"optional/subdir","max_depth":4}',
+        ),
+        ToolSpec(
             "replace_text",
             "Replace one exact, unique text block in a file. Prefer this for small local edits.",
             '{"path":"file.py","old_text":"exact text","new_text":"replacement"}',
@@ -59,6 +66,7 @@ class RepositoryTools:
             "list_files": self.list_files,
             "search_code": self.search_code,
             "read_file": self.read_file,
+            "inspect_python_class": self.inspect_python_class,
             "replace_text": self.replace_text,
             "apply_patch": self.apply_patch,
             "run_tests": self.run_tests,
@@ -140,6 +148,109 @@ class RepositoryTools:
         lines = path.read_text(encoding="utf-8").splitlines()
         selected = (f"{number:4d} | {lines[number - 1]}" for number in range(start, min(end, len(lines)) + 1))
         return ToolResult(True, self._limit("\n".join(selected) or "(empty range)"))
+
+    def inspect_python_class(self, arguments: dict[str, Any]) -> ToolResult:
+        raw_name = arguments.get("class_name")
+        if not isinstance(raw_name, str) or not raw_name.strip():
+            return ToolResult(False, "class_name must be a non-empty string")
+        class_name = raw_name.strip().rsplit(".", 1)[-1]
+        if not class_name.isidentifier():
+            return ToolResult(False, "class_name must end with a valid Python identifier")
+        base = self._resolve(str(arguments.get("path", ".")))
+        if not base.exists():
+            return ToolResult(False, "Requested path does not exist")
+        max_depth = int(arguments.get("max_depth", 4))
+        if not 1 <= max_depth <= 8:
+            return ToolResult(False, "max_depth must be between 1 and 8")
+
+        definitions: dict[str, list[dict[str, Any]]] = {}
+        parse_errors = 0
+        files = [base] if base.is_file() else self._iter_files(base)
+        for path in files:
+            if path.suffix != ".py":
+                continue
+            try:
+                source = path.read_text(encoding="utf-8")
+                tree = ast.parse(source, filename=str(path))
+            except (OSError, UnicodeDecodeError, SyntaxError):
+                parse_errors += 1
+                continue
+            relative = str(path.relative_to(self.root))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.ClassDef):
+                    continue
+                slots_line = self._class_slots_line(node)
+                record = {
+                    "name": node.name,
+                    "path": relative,
+                    "line": node.lineno,
+                    "end_line": getattr(node, "end_lineno", node.lineno),
+                    "declares_slots": slots_line is not None,
+                    "slots_line": slots_line,
+                    "base_expressions": [ast.unparse(item) for item in node.bases],
+                }
+                definitions.setdefault(node.name, []).append(record)
+
+        def expand(
+            record: dict[str, Any],
+            depth: int,
+            lineage: frozenset[tuple[str, int]],
+        ) -> dict[str, Any]:
+            key = (str(record["path"]), int(record["line"]))
+            result = {
+                field: value
+                for field, value in record.items()
+                if field != "base_expressions"
+            }
+            bases = []
+            for expression in record["base_expressions"]:
+                simple_name = expression.rsplit(".", 1)[-1]
+                candidates = definitions.get(simple_name, [])
+                base_result: dict[str, Any] = {
+                    "expression": expression,
+                    "definitions": [],
+                }
+                if depth < max_depth:
+                    base_result["definitions"] = [
+                        expand(candidate, depth + 1, lineage | {key})
+                        for candidate in candidates[:5]
+                        if (candidate["path"], candidate["line"]) not in lineage | {key}
+                    ]
+                elif candidates:
+                    base_result["definitions"] = [
+                        {
+                            field: value
+                            for field, value in candidate.items()
+                            if field != "base_expressions"
+                        }
+                        for candidate in candidates[:5]
+                    ]
+                    base_result["depth_limited"] = True
+                bases.append(base_result)
+            result["bases"] = bases
+            return result
+
+        matches = definitions.get(class_name, [])
+        output = {
+            "class_name": class_name,
+            "max_depth": max_depth,
+            "definitions_found": len(matches),
+            "parse_errors": parse_errors,
+            "definitions": [expand(record, 0, frozenset()) for record in matches[:10]],
+        }
+        return ToolResult(True, self._limit(json.dumps(output, ensure_ascii=False, indent=2)))
+
+    @staticmethod
+    def _class_slots_line(node: ast.ClassDef) -> int | None:
+        for item in node.body:
+            targets: list[ast.expr] = []
+            if isinstance(item, ast.Assign):
+                targets = item.targets
+            elif isinstance(item, ast.AnnAssign):
+                targets = [item.target]
+            if any(isinstance(target, ast.Name) and target.id == "__slots__" for target in targets):
+                return item.lineno
+        return None
 
     def apply_patch(self, arguments: dict[str, Any]) -> ToolResult:
         patch = arguments.get("patch")

@@ -19,6 +19,47 @@ class ScriptedModel:
 
 
 class AgentEndToEndTest(unittest.TestCase):
+    def test_first_edit_deadline_blocks_continued_inspection(self) -> None:
+        model = ScriptedModel([
+            *[
+                {"tool": "read_file", "arguments": {"path": "calculator.py"}}
+                for _ in range(6)
+            ],
+            {
+                "tool": "replace_text",
+                "arguments": {
+                    "path": "calculator.py",
+                    "old_text": "return a - b",
+                    "new_text": "return a + b",
+                },
+            },
+            {"tool": "run_tests", "arguments": {}},
+            {"final": "Fixed and verified."},
+        ])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            (root / "calculator.py").write_text(
+                "def add(a, b):\n    return a - b\n",
+                encoding="utf-8",
+            )
+            (root / "test_calculator.py").write_text(
+                "import unittest\nfrom calculator import add\n\n"
+                "class CalculatorTest(unittest.TestCase):\n"
+                "    def test_add(self):\n        self.assertEqual(add(2, 3), 5)\n",
+                encoding="utf-8",
+            )
+            result = Agent(
+                model,
+                RepositoryTools(root, "python -m unittest -q"),
+                root / "traces",
+                max_steps=10,
+            ).run("add subtracts")
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.metrics.budget_blocked_actions, 1)
+        self.assertEqual(result.metrics.first_edit_step, 7)
+
     def test_budget_blocks_late_broad_inspection_but_leaves_repair_turns(self) -> None:
         model = ScriptedModel([
             {"tool": "list_files", "arguments": {}},

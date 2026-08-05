@@ -12,6 +12,8 @@ boundaries, prompts, and traces are all visible in this repository.
 ## Current MVP
 
 - Repository-scoped `list_files`, `search_code`, and `read_file` tools
+- Static `inspect_python_class` inheritance tracing with definition locations
+  and `__slots__` detection; repository code is parsed but never imported
 - Exact, single-occurrence `replace_text` for reliable small edits
 - Unified-diff `apply_patch` tool with path validation and `git apply --check`
   (including minimal zero-context diffs)
@@ -65,9 +67,11 @@ The model emits exactly one JSON object per turn:
 {"tool":"search_code","arguments":{"query":"def add"}}
 ```
 
-Available tools are `list_files`, `search_code`, `read_file`, `replace_text`,
-`apply_patch`, `run_tests`, and `git_diff`. Prefer `replace_text` for one exact
-local replacement and reserve `apply_patch` for complex or multi-file edits.
+Available tools are `list_files`, `search_code`, `read_file`,
+`inspect_python_class`, `replace_text`, `apply_patch`, `run_tests`, and
+`git_diff`. Use `inspect_python_class` for Python inheritance, MRO, or
+`__slots__` issues. Prefer `replace_text` for one exact local replacement and
+reserve `apply_patch` for complex or multi-file edits.
 A run ends with:
 
 ```json
@@ -150,6 +154,65 @@ change the image, test command, or limits during a run.
 container test passed, and a post-edit `git_diff` succeeded. It is a process
 signal, not the official benchmark result. The generated `predictions.jsonl`
 must still pass the SWE-bench harness.
+
+## Batch SWE-bench evaluation
+
+Batch runs are driven by a versioned JSONL manifest. Each record pins the
+instance file, Docker image, test command, step budget, and timeout:
+
+```json
+{"schema_version":1,"instance_id":"sympy__sympy-20590","instance_file":"sympy__sympy-20590.json","docker_image":"sweb.eval.x86_64.sympy__sympy-20590:latest","test_command":"python -c 'from sympy import Symbol; assert not hasattr(Symbol(\"s\"), \"__dict__\")'","max_steps":25,"timeout":180,"enabled":true}
+```
+
+Relative paths are resolved from the manifest's directory. Validate all files
+and local Docker images without loading an API key or calling the model:
+
+```bash
+uv run python -m patchpilot.evaluate_swebench_batch \
+  --manifest benchmarks/swebench/dev_manifest.jsonl \
+  --validate-only
+```
+
+Generate one prediction per enabled case. A failure is written to that case's
+result file and does not abort later cases:
+
+```bash
+uv run python -m patchpilot.evaluate_swebench_batch \
+  --manifest benchmarks/swebench/dev_manifest.jsonl \
+  --stage generate
+```
+
+Every run writes `.patchpilot/swebench/batch/<run-id>/` containing a manifest
+snapshot, per-case state, individual trajectories and patches, one merged
+`predictions.jsonl`, and `summary.json`. Resume an interrupted run by passing
+its exact directory:
+
+```bash
+uv run python -m patchpilot.evaluate_swebench_batch \
+  --manifest benchmarks/swebench/dev_manifest.jsonl \
+  --stage generate \
+  --run-dir .patchpilot/swebench/batch/<run-id> \
+  --resume
+```
+
+Completed cases with intact prediction artifacts are skipped. Error cases and
+completed records whose prediction artifact was lost are attempted again. The
+manifest snapshot and model name must match the original run.
+
+Run official grading separately so an evaluator or Docker failure never causes
+another paid model rollout:
+
+```bash
+uv run --with swebench python -m patchpilot.evaluate_swebench_batch \
+  --manifest benchmarks/swebench/dev_manifest.jsonl \
+  --stage official \
+  --run-dir .patchpilot/swebench/batch/<run-id>
+```
+
+Use `--stage all` to generate and grade in one process when the optional
+`swebench` package is available. The final summary separates generation errors,
+patch generation, `agent_verified`, official resolved/unresolved/error states,
+tool metrics, first-edit step, duration, and official resolve rate.
 
 Run the official Docker evaluator on the generated prediction separately:
 
