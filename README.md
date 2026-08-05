@@ -1,0 +1,175 @@
+# PatchPilot
+
+PatchPilot is a small, inspectable code-repair agent. Given a bug report and a
+local Python repository, it lets an LLM inspect files, search code, apply a
+unified diff, run a fixed test command, and return a final answer. Every model
+decision and tool result is written to a JSONL trajectory for later evaluation
+or post-training.
+
+The first milestone intentionally avoids an agent framework. The loop, tool
+boundaries, prompts, and traces are all visible in this repository.
+
+## Current MVP
+
+- Repository-scoped `list_files`, `search_code`, and `read_file` tools
+- Exact, single-occurrence `replace_text` for reliable small edits
+- Unified-diff `apply_patch` tool with path validation and `git apply --check`
+  (including minimal zero-context diffs)
+- Fixed `run_tests` tool; the model cannot choose an arbitrary command
+- `git_diff` inspection
+- OpenAI-compatible chat-completions client
+- Deterministic fake model for offline end-to-end tests
+- JSONL trajectories suitable for later data processing
+
+## Quick start
+
+Python 3.11 or newer is supported.
+
+```bash
+PYTHONPATH=src python -m unittest discover -s tests -v
+PYTHONPATH=src python -m patchpilot --help
+```
+
+Run against a local repository with an OpenAI-compatible endpoint:
+
+```bash
+cp .env.example .env
+# Edit .env and replace PATCHPILOT_API_KEY with your real key.
+
+PYTHONPATH=src python -m patchpilot \
+  --repo /path/to/buggy/repo \
+  --issue "The add function subtracts its second argument" \
+  --test-command "python -m pytest -q"
+```
+
+Optional environment variables:
+
+- `PATCHPILOT_BASE_URL` (default: `https://api.openai.com/v1`)
+- `PATCHPILOT_API_KEY`
+- `PATCHPILOT_MODEL`
+
+PatchPilot loads `.env` from the current directory. Existing process environment
+variables take precedence over values in the file. To use another file, pass
+`--env-file /path/to/config.env`. The real `.env` file is ignored by Git; only
+the placeholder `.env.example` should be committed. `--model` remains available
+as a one-run override for `PATCHPILOT_MODEL`.
+
+Traces are saved under `.patchpilot/trajectories/` in the target repository by
+default. Use `--trajectory-dir` to keep them elsewhere.
+
+## Action protocol
+
+The model emits exactly one JSON object per turn:
+
+```json
+{"tool":"search_code","arguments":{"query":"def add"}}
+```
+
+Available tools are `list_files`, `search_code`, `read_file`, `replace_text`,
+`apply_patch`, `run_tests`, and `git_diff`. Prefer `replace_text` for one exact
+local replacement and reserve `apply_patch` for complex or multi-file edits.
+A run ends with:
+
+```json
+{"final":"Fixed the arithmetic bug and verified the test suite."}
+```
+
+A run is only marked successful after an edit, a passing test run, and a
+successful `git_diff` inspection after the latest edit. Trajectories and
+benchmark summaries record tool failures plus edit, patch, and replacement
+attempt/success rates.
+
+## Safety boundary
+
+File tools reject absolute paths and traversal outside the selected repository.
+The test command is supplied by the human at process startup and runs with a
+timeout. It is still local code execution: only run PatchPilot on repositories
+you trust, ideally inside a disposable container. Stronger OS-level sandboxing
+is planned, not claimed by this MVP.
+
+## Roadmap
+
+1. Establish baselines on a small curated Python bug set.
+2. Add hybrid retrieval (lexical first, embeddings as an experiment).
+3. Expand from one validated SWE-bench Verified instance to a pinned subset.
+4. Add automated official-image preparation and batch evaluation.
+5. Convert trajectories into SFT and preference datasets.
+
+## Local benchmark
+
+The repository includes three intentionally buggy Python cases. The evaluator
+copies each fixture into an isolated temporary Git repository, confirms its
+tests fail, runs the agent, and stores a summary, patch, and trajectory:
+
+```bash
+uv run python -m patchpilot.evaluate \
+  --benchmark benchmarks/cases
+```
+
+See `benchmarks/README.md` for case selection and output details.
+
+## SWE-bench adapter
+
+PatchPilot can generate one prediction in the JSONL format expected by the
+official SWE-bench evaluator. The adapter reads an official-style instance,
+clones its repository at `base_commit`, runs PatchPilot in the disposable
+clone, and saves both `model.patch` and `predictions.jsonl`:
+
+```bash
+uv run python -m patchpilot.evaluate_swebench \
+  --instance-file /path/to/swebench-dev.jsonl \
+  --instance-id sympy__sympy-20590 \
+  --test-command "python -m pytest -q"
+```
+
+The instance file may be one JSON object, a JSON array, or JSONL. Each selected
+record must contain `instance_id`, `repo`, `base_commit`, and
+`problem_statement`. For offline development, `--source-repo` can point to an
+existing local Git clone; PatchPilot still creates and edits a separate clone.
+
+For a realistic run, pass an existing official SWE-bench instance image. The
+adapter copies the image's pinned `/testbed` checkout into a disposable host
+working tree, lets the agent edit that copy, and runs the fixed test command in
+a fresh container after every `run_tests` action:
+
+```bash
+uv run python -m patchpilot.evaluate_swebench \
+  --instance-file benchmarks/swebench/sympy__sympy-20590.json \
+  --docker-image sweb.eval.x86_64.sympy__sympy-20590:latest \
+  --test-command "python -c 'from sympy import Symbol; assert not hasattr(Symbol(\"s\"), \"__dict__\")'" \
+  --max-steps 25 \
+  --timeout 180
+```
+
+Container tests default to `linux/amd64`, no network, 2 CPUs, 4 GiB memory,
+and 512 processes. These limits can be changed with `--docker-platform`,
+`--docker-cpus`, `--docker-memory`, and `--docker-pids-limit`. The model cannot
+change the image, test command, or limits during a run.
+
+`agent_verified` only means that PatchPilot applied an edit, the configured
+container test passed, and a post-edit `git_diff` succeeded. It is a process
+signal, not the official benchmark result. The generated `predictions.jsonl`
+must still pass the SWE-bench harness.
+
+Run the official Docker evaluator on the generated prediction separately:
+
+```bash
+uv run --with swebench python -m swebench.harness.run_evaluation \
+  --dataset_name princeton-nlp/SWE-bench_Verified \
+  --split test \
+  --predictions_path /path/to/predictions.jsonl \
+  --max_workers 1 \
+  --instance_ids sympy__sympy-20590 \
+  --run_id patchpilot-single \
+  --namespace ''
+```
+
+On Apple Silicon, `--namespace ''` builds or reuses local amd64 images. The
+first build is slow because it installs the shared Ubuntu/Miniconda environment;
+later instances can reuse those layers. Official evaluation executes third-party
+repository code and can consume substantial disk space, so start with one
+verified instance and keep Docker resource limits enabled.
+
+The `sympy__sympy-20590` development run was validated end to end: the gold
+patch resolved 1/1 instance, and PatchPilot with `deepseek-v4-flash` generated a
+functionally equivalent patch that also resolved 1/1 under the official harness.

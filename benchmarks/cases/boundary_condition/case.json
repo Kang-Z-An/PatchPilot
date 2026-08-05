@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "id": "boundary_condition_001",
+  "issue": "ranges.py 中的 inclusive_range 应同时包含 start 和 end，但当前遗漏了结束值。例如 inclusive_range(2, 4) 应返回 [2, 3, 4]。请修复并运行测试。",
+  "test_command": "python -m unittest -q",
+  "language": "python",
+  "category": "boundary_condition"
+}

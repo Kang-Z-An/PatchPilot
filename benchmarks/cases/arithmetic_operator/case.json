@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "id": "arithmetic_operator_001",
+  "issue": "calculator.py 中的 add 函数错误地执行了减法。add(2, 3) 应返回 5。请定位问题、进行最小修改并运行测试。",
+  "test_command": "python -m unittest -q",
+  "language": "python",
+  "category": "logic_error"
+}

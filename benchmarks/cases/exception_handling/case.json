@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "id": "exception_handling_001",
+  "issue": "ports.py 的 parse_port 对非数字字符串没有转换成统一的错误信息。parse_port(\"abc\") 应抛出消息为 'port must be an integer' 的 ValueError。请修复并确保其他端口校验仍然通过。",
+  "test_command": "python -m unittest -q",
+  "language": "python",
+  "category": "exception_handling"
+}
