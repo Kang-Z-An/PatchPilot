@@ -104,6 +104,10 @@ class SWEBenchBatchTest(unittest.TestCase):
             self.assertEqual(summary["patch_generated"], 1)
             self.assertEqual(summary["agent_verified"], 1)
             self.assertEqual(summary["official"]["status"], "pending")
+            self.assertEqual(summary["metrics"]["runs_tested_after_latest_edit"], 1)
+            self.assertEqual(summary["metrics"]["test_freshness_rate"], 1.0)
+            self.assertTrue(summary["cases"][0]["tests_run_after_latest_edit"])
+            self.assertEqual(summary["cases"][0]["test_files_modified"], 0)
             self.assertTrue(summary_path.is_file())
             predictions = (run_dir / "predictions.jsonl").read_text(encoding="utf-8")
             self.assertIn("return a + b", predictions)
@@ -242,6 +246,31 @@ class SWEBenchBatchTest(unittest.TestCase):
             self.assertEqual(summary["official"]["empty_patches"], 1)
             self.assertEqual(summary["official"]["resolve_rate"], 0.0)
             self.assertEqual(summary["cases"][0]["official_status"], "empty_patch")
+
+    def test_manifest_protects_test_files_by_default_and_allows_opt_out(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, commit = self._make_repository(root / "source")
+            first = self._write_instance(root, "example__repo-1", commit)
+            second = self._write_instance(root, "example__repo-2", commit)
+            records = [
+                self._record(first, source, "example__repo-1"),
+                {
+                    **self._record(second, source, "example__repo-2"),
+                    "protect_test_files": False,
+                },
+            ]
+            manifest = root / "manifest.jsonl"
+            manifest.write_text(
+                "".join(json.dumps(record) + "\n" for record in records),
+                encoding="utf-8",
+            )
+
+            cases = load_batch_manifest(manifest)
+
+        self.assertTrue(cases[0].protect_test_files)
+        self.assertFalse(cases[1].protect_test_files)
+        self.assertTrue(cases[0].snapshot()["protect_test_files"])
 
     def _make_manifest(self, root: Path, count: int = 1):
         source, commit = self._make_repository(root / "source")

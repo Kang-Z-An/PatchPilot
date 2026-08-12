@@ -7,7 +7,7 @@ import re
 import shlex
 import subprocess
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Callable
 
 from .types import ToolResult
@@ -16,6 +16,8 @@ from .types import ToolResult
 _IGNORED_DIRS = {".git", ".patchpilot", ".venv", "__pycache__", "node_modules"}
 _MAX_OUTPUT = 20_000
 _DIFF_PATHS = [".", ":(exclude).patchpilot", ":(exclude).patchpilot/**"]
+_TEST_DIRECTORY_NAMES = {"test", "tests", "testing"}
+_TEST_FILE_NAMES = {"conftest.py"}
 
 
 @dataclass(frozen=True)
@@ -53,6 +55,7 @@ class RepositoryTools:
         test_command: str,
         timeout_seconds: int = 120,
         test_runner: Callable[[], ToolResult] | None = None,
+        protect_test_files: bool = False,
     ) -> None:
         self.root = root.resolve()
         if not self.root.is_dir():
@@ -62,6 +65,10 @@ class RepositoryTools:
             raise ValueError("Test command cannot be empty")
         self.timeout_seconds = timeout_seconds
         self._test_runner = test_runner
+        if not isinstance(protect_test_files, bool):
+            raise ValueError("protect_test_files must be a boolean")
+        self.protect_test_files = protect_test_files
+        self._ignored_diff_paths: set[str] = set()
         self._handlers: dict[str, Callable[[dict[str, Any]], ToolResult]] = {
             "list_files": self.list_files,
             "search_code": self.search_code,
@@ -73,12 +80,19 @@ class RepositoryTools:
             "git_diff": self.git_diff,
         }
 
-    @classmethod
-    def prompt_description(cls) -> str:
-        return "\n".join(
+    def prompt_description(self) -> str:
+        description = "\n".join(
             f'- {spec.name}: {spec.description} Arguments: {spec.arguments}'
-            for spec in cls.SPECS
+            for spec in self.SPECS
         )
+        if self.protect_test_files:
+            description += (
+                "\nEditing test files is disabled. You may inspect tests, but "
+                "replace_text and apply_patch will reject changes under test/, "
+                "tests/, or testing/, and files named test_*.py, *_test.py, or "
+                "conftest.py. Fix production code only."
+            )
+        return description
 
     def execute(self, name: str, arguments: dict[str, Any]) -> ToolResult:
         handler = self._handlers.get(name)
@@ -88,6 +102,17 @@ class RepositoryTools:
             return handler(arguments)
         except (OSError, ValueError, TypeError) as exc:
             return ToolResult(False, f"{type(exc).__name__}: {exc}")
+
+    def ignore_diff_path(self, path: Path) -> None:
+        """Exclude an Agent-owned path inside the repository from repair diffs."""
+        resolved = path.resolve()
+        try:
+            relative = resolved.relative_to(self.root)
+        except ValueError:
+            return
+        if relative == Path("."):
+            raise ValueError("Cannot ignore the entire repository diff")
+        self._ignored_diff_paths.add(relative.as_posix())
 
     def _resolve(self, raw_path: str, *, require_file: bool = False) -> Path:
         candidate = (self.root / raw_path).resolve()
@@ -258,6 +283,16 @@ class RepositoryTools:
             return ToolResult(False, "patch must be a non-empty string")
         patch = self._normalize_patch(patch)
         self._validate_patch_paths(patch)
+        protected = self._protected_patch_paths(patch)
+        if protected:
+            return ToolResult(
+                False,
+                "Protected test files are read-only: " + ", ".join(protected),
+                {
+                    "reason": "protected_test_file",
+                    "protected_paths": protected,
+                },
+            )
         check = self._run(["git", "apply", "--check", "--unidiff-zero", "-"], stdin=patch)
         if check.returncode != 0:
             return ToolResult(False, self._format_process(check))
@@ -276,6 +311,15 @@ class RepositoryTools:
             return ToolResult(False, "new_text must be a string")
         if old_text == new_text:
             return ToolResult(False, "old_text and new_text must be different")
+        if self.protect_test_files and is_test_file_path(raw_path):
+            return ToolResult(
+                False,
+                f"Protected test file is read-only: {raw_path}",
+                {
+                    "reason": "protected_test_file",
+                    "protected_paths": [raw_path],
+                },
+            )
         path = self._resolve(raw_path, require_file=True)
         content = path.read_text(encoding="utf-8")
         occurrences = content.count(old_text)
@@ -298,13 +342,46 @@ class RepositoryTools:
     def git_diff(self, arguments: dict[str, Any]) -> ToolResult:
         if arguments:
             return ToolResult(False, "git_diff does not accept arguments")
+        pathspecs = self._diff_pathspecs()
         intent = self._run(
-            ["git", "add", "--intent-to-add", "--all", "--", *_DIFF_PATHS]
+            ["git", "add", "--intent-to-add", "--all", "--", *pathspecs]
         )
         if intent.returncode != 0:
             return ToolResult(False, self._format_process(intent))
-        result = self._run(["git", "diff", "--no-ext-diff"])
-        return ToolResult(result.returncode == 0, self._format_process(result) or "(no diff)")
+        result = self._run(["git", "diff", "--no-ext-diff", "--", *pathspecs])
+        if result.returncode != 0:
+            return ToolResult(False, self._format_process(result))
+        names = self._run(
+            ["git", "diff", "--name-only", "--no-ext-diff", "-z", "--", *pathspecs]
+        )
+        if names.returncode != 0:
+            return ToolResult(False, self._format_process(names))
+        changed_files = sorted(path for path in names.stdout.split("\0") if path)
+        test_files = [path for path in changed_files if is_test_file_path(path)]
+        data = {
+            "has_diff": bool(result.stdout.strip()),
+            "changed_files": changed_files,
+            "test_files_modified": test_files,
+        }
+        if not data["has_diff"]:
+            return ToolResult(
+                False,
+                "No working-tree diff. A repair must leave a non-empty change.",
+                {**data, "reason": "empty_diff"},
+            )
+        if self.protect_test_files and test_files:
+            return ToolResult(
+                False,
+                "Final diff contains protected test files: " + ", ".join(test_files),
+                {**data, "reason": "protected_final_diff"},
+            )
+        return ToolResult(True, self._format_process(result), data)
+
+    def _diff_pathspecs(self) -> list[str]:
+        pathspecs = list(_DIFF_PATHS)
+        for path in sorted(self._ignored_diff_paths):
+            pathspecs.extend((f":(exclude){path}", f":(exclude){path}/**"))
+        return pathspecs
 
     def _run(self, command: list[str], stdin: str | None = None) -> subprocess.CompletedProcess[str]:
         try:
@@ -349,6 +426,19 @@ class RepositoryTools:
             if candidate.is_absolute() or ".." in candidate.parts:
                 raise ValueError(f"Unsafe patch path: {header}")
 
+    def _protected_patch_paths(self, patch: str) -> list[str]:
+        if not self.protect_test_files:
+            return []
+        paths = {
+            normalized
+            for header in re.findall(
+                r"^(?:---|\+\+\+)\s+([^\t\n]+)", patch, re.MULTILINE
+            )
+            if (normalized := _normalize_diff_path(header)) is not None
+            and is_test_file_path(normalized)
+        }
+        return sorted(paths)
+
     @staticmethod
     def _format_process(result: subprocess.CompletedProcess[str]) -> str:
         combined = result.stdout
@@ -361,3 +451,24 @@ class RepositoryTools:
         if len(text) <= _MAX_OUTPUT:
             return text
         return text[:_MAX_OUTPUT] + "\n...[output truncated]"
+
+
+def is_test_file_path(raw_path: str) -> bool:
+    """Return whether a repository-relative path is part of the test suite."""
+    path = PurePosixPath(raw_path.replace("\\", "/"))
+    parts = tuple(part.lower() for part in path.parts if part not in {"", "."})
+    if not parts:
+        return False
+    filename = parts[-1]
+    return (
+        any(part in _TEST_DIRECTORY_NAMES for part in parts[:-1])
+        or filename in _TEST_FILE_NAMES
+        or (filename.startswith("test_") and filename.endswith(".py"))
+        or filename.endswith("_test.py")
+    )
+
+
+def _normalize_diff_path(header: str) -> str | None:
+    if header == "/dev/null":
+        return None
+    return header[2:] if header.startswith(("a/", "b/")) else header

@@ -36,6 +36,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--test-command", default="python -m pytest -q")
     parser.add_argument("--max-steps", type=int, default=20)
     parser.add_argument("--timeout", type=int, default=120, help="Tool timeout in seconds")
+    parser.add_argument(
+        "--protect-test-files",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Make conventional test files read-only to the agent",
+    )
     parser.add_argument("--trajectory-dir", type=Path)
     parser.add_argument(
         "--env-file",
@@ -51,7 +57,12 @@ def main(argv: list[str] | None = None) -> int:
     api_key, base_url, model_name = load_model_config(args.env_file, args.model)
     repo = args.repo.resolve()
     trajectory_dir = args.trajectory_dir or repo / ".patchpilot" / "trajectories"
-    tools = RepositoryTools(repo, args.test_command, args.timeout)
+    tools = RepositoryTools(
+        repo,
+        args.test_command,
+        args.timeout,
+        protect_test_files=args.protect_test_files,
+    )
     model = OpenAICompatibleModel(model_name, api_key, base_url, args.timeout)
     result = Agent(model, tools, trajectory_dir, args.max_steps).run(args.issue)
     print(result.answer)

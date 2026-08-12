@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from patchpilot.cli import build_parser, load_model_config
 from patchpilot.evaluate import build_parser as build_evaluate_parser
+from patchpilot.evaluate_swebench import build_parser as build_swebench_parser
 
 
 class CliTest(unittest.TestCase):
@@ -51,6 +52,39 @@ class CliTest(unittest.TestCase):
         ])
 
         self.assertEqual(args.env_file, Path("private/provider.env"))
+
+    def test_test_file_edit_policy_cli_defaults(self) -> None:
+        agent_args = build_parser().parse_args([
+            "--repo",
+            "/tmp/repo",
+            "--issue",
+            "fix it",
+        ])
+        protected_agent_args = build_parser().parse_args([
+            "--repo",
+            "/tmp/repo",
+            "--issue",
+            "fix it",
+            "--protect-test-files",
+        ])
+        swebench_args = build_swebench_parser().parse_args([
+            "--instance-file",
+            "instance.json",
+            "--test-command",
+            "python -m pytest -q",
+        ])
+        unprotected_swebench_args = build_swebench_parser().parse_args([
+            "--instance-file",
+            "instance.json",
+            "--test-command",
+            "python -m pytest -q",
+            "--allow-test-file-edits",
+        ])
+
+        self.assertFalse(agent_args.protect_test_files)
+        self.assertTrue(protected_agent_args.protect_test_files)
+        self.assertFalse(swebench_args.allow_test_file_edits)
+        self.assertTrue(unprotected_swebench_args.allow_test_file_edits)
 
     def test_loads_model_config_from_dotenv(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

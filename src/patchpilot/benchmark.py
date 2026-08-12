@@ -71,7 +71,7 @@ class CaseResult:
     answer: str
     trajectory_path: str | None
     patch_path: str | None
-    metrics: dict[str, int | float]
+    metrics: dict[str, int | float | bool]
     error: str | None = None
 
 
@@ -138,6 +138,9 @@ class BenchmarkRunner:
             "patch_successes",
             "replace_text_attempts",
             "replace_text_successes",
+            "protected_edit_attempts",
+            "empty_diff_attempts",
+            "test_files_modified",
         )
         metric_totals = {
             key: sum(int(result.metrics[key]) for result in results)
@@ -178,6 +181,17 @@ class BenchmarkRunner:
                 "replace_text_success_rate": self._rate(
                     metric_totals["replace_text_successes"],
                     metric_totals["replace_text_attempts"],
+                ),
+                "runs_tested_after_latest_edit": sum(
+                    bool(result.metrics.get("tests_run_after_latest_edit", False))
+                    for result in attempted
+                ),
+                "test_freshness_rate": self._rate(
+                    sum(
+                        bool(result.metrics.get("tests_run_after_latest_edit", False))
+                        for result in attempted
+                    ),
+                    len(attempted),
                 ),
             },
             "cases": [asdict(result) for result in results],

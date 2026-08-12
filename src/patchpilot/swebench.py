@@ -63,7 +63,7 @@ class SWEBenchRunResult:
     patch_path: str
     predictions_path: str
     metadata_path: str
-    metrics: dict[str, int | float]
+    metrics: dict[str, int | float | bool]
 
 
 def load_instance(path: Path, instance_id: str | None = None) -> SWEBenchInstance:
@@ -216,6 +216,7 @@ class SWEBenchRunner:
         docker_cpus: float = 2.0,
         docker_memory: str = "4g",
         docker_pids_limit: int = 512,
+        protect_test_files: bool = True,
     ) -> None:
         self.model = model
         self.model_name = model_name
@@ -228,6 +229,7 @@ class SWEBenchRunner:
         self.docker_cpus = docker_cpus
         self.docker_memory = docker_memory
         self.docker_pids_limit = docker_pids_limit
+        self.protect_test_files = protect_test_files
 
     def run(
         self,
@@ -266,6 +268,7 @@ class SWEBenchRunner:
             self.test_command,
             self.timeout_seconds,
             test_runner=docker_runner.run if docker_runner is not None else None,
+            protect_test_files=self.protect_test_files,
         )
         agent_result = Agent(
             self.model,

@@ -78,10 +78,17 @@ A run ends with:
 {"final":"Fixed the arithmetic bug and verified the test suite."}
 ```
 
-A run is only marked successful after an edit, a passing test run, and a
-successful `git_diff` inspection after the latest edit. Trajectories and
-benchmark summaries record tool failures plus edit, patch, and replacement
-attempt/success rates.
+A run is only marked successful after a real non-empty edit, a passing test run
+after the latest successful edit, and a successful `git_diff` inspection of
+that final state. Agent-owned trajectory paths are excluded from the diff, so
+artifacts cannot masquerade as a repair. When test protection is enabled, a
+final diff containing a protected test file is rejected even if that change
+was created outside the editing tools.
+
+Trajectories and benchmark summaries record tool failures; edit, patch, and
+replacement attempt/success rates; blocked test-file edits; empty-diff
+attempts; test files present in the final patch; and whether tests were rerun
+after the latest edit.
 
 ## Safety boundary
 
@@ -150,10 +157,19 @@ and 512 processes. These limits can be changed with `--docker-platform`,
 `--docker-cpus`, `--docker-memory`, and `--docker-pids-limit`. The model cannot
 change the image, test command, or limits during a run.
 
-`agent_verified` only means that PatchPilot applied an edit, the configured
-container test passed, and a post-edit `git_diff` succeeded. It is a process
-signal, not the official benchmark result. The generated `predictions.jsonl`
-must still pass the SWE-bench harness.
+SWE-bench runs also make conventional test files read-only to the Agent by
+default. Tests remain available to search and read, but edits under `test/`,
+`tests/`, or `testing/`, and edits to `test_*.py`, `*_test.py`, or `conftest.py`
+are rejected by both editing tools. Use `--allow-test-file-edits` only for a
+task that explicitly requires changing tests. The general `patchpilot` command
+keeps its previous permissive default and offers `--protect-test-files` when
+the same source-only policy is wanted.
+
+`agent_verified` means that PatchPilot left a non-empty diff, the configured
+container test passed after the latest edit, and the final diff passed its
+inspection and test-file policy. It is a process signal, not the official
+benchmark result. The generated `predictions.jsonl` must still pass the
+SWE-bench harness.
 
 ## Batch SWE-bench evaluation
 
@@ -161,7 +177,7 @@ Batch runs are driven by a versioned JSONL manifest. Each record pins the
 instance file, Docker image, test command, step budget, and timeout:
 
 ```json
-{"schema_version":1,"instance_id":"sympy__sympy-20590","instance_file":"sympy__sympy-20590.json","docker_image":"sweb.eval.x86_64.sympy__sympy-20590:latest","test_command":"python -c 'from sympy import Symbol; assert not hasattr(Symbol(\"s\"), \"__dict__\")'","max_steps":25,"timeout":180,"enabled":true}
+{"schema_version":1,"instance_id":"sympy__sympy-20590","instance_file":"sympy__sympy-20590.json","docker_image":"sweb.eval.x86_64.sympy__sympy-20590:latest","test_command":"python -c 'from sympy import Symbol; assert not hasattr(Symbol(\"s\"), \"__dict__\")'","max_steps":25,"timeout":180,"enabled":true,"protect_test_files":true}
 ```
 
 Relative paths are resolved from the manifest's directory. Validate all files
@@ -172,6 +188,9 @@ uv run python -m patchpilot.evaluate_swebench_batch \
   --manifest benchmarks/swebench/dev_manifest.jsonl \
   --validate-only
 ```
+
+`protect_test_files` defaults to `true` when omitted and is stored in the run's
+manifest snapshot. Set it to `false` only for a deliberately test-editing case.
 
 Generate one prediction per enabled case. A failure is written to that case's
 result file and does not abort later cases:
@@ -212,7 +231,23 @@ uv run --with swebench python -m patchpilot.evaluate_swebench_batch \
 Use `--stage all` to generate and grade in one process when the optional
 `swebench` package is available. The final summary separates generation errors,
 patch generation, `agent_verified`, official resolved/unresolved/error states,
-tool metrics, first-edit step, duration, and official resolve rate.
+tool and patch-quality metrics, test freshness, first-edit step, duration, and
+official resolve rate.
+
+Audit a completed official run without calling the model again:
+
+```bash
+uv run python -m patchpilot.analyze_swebench_run \
+  --run-dir .patchpilot/swebench/batch/<run-id>
+```
+
+The analyzer reads the official per-instance `FAIL_TO_PASS` and `PASS_TO_PASS`
+results, reports modified test files, and writes `analysis/summary.json` plus
+`analysis/report.md`. It only labels an unresolved case as environment-suspect
+when its target tests passed and an available gold-patch control reproduced the
+identical non-empty regression-failure set. Without that gold control, the case
+remains an unconfirmed candidate. These annotations never replace or adjust the
+official resolved count or resolve rate.
 
 Run the official Docker evaluator on the generated prediction separately:
 
@@ -236,3 +271,15 @@ verified instance and keep Docker resource limits enabled.
 The `sympy__sympy-20590` development run was validated end to end: the gold
 patch resolved 1/1 instance, and PatchPilot with `deepseek-v4-flash` generated a
 functionally equivalent patch that also resolved 1/1 under the official harness.
+
+## Recorded experiments
+
+Versioned experiment reports keep compact, reviewable evidence in Git without
+committing disposable repositories or full Docker logs. The first frozen
+multi-repository run is documented in
+[`experiments/pilot_v1_deepseek/`](experiments/pilot_v1_deepseek/README.md):
+PatchPilot generated and locally verified 8/8 patches, with an official
+SWE-bench result of 7/8 resolved (87.5%). Its one unresolved instance is kept in
+the official count and accompanied by a separate gold-patch environment audit.
+The same evidence can now be regenerated from the ignored run artifacts with
+`patchpilot.analyze_swebench_run`.

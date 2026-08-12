@@ -30,6 +30,9 @@ _COUNT_METRICS = (
     "inspection_calls",
     "budget_blocked_actions",
     "automatic_git_diff_calls",
+    "protected_edit_attempts",
+    "empty_diff_attempts",
+    "test_files_modified",
 )
 
 
@@ -43,6 +46,7 @@ class SWEBenchBatchCase:
     max_steps: int = 25
     timeout: int = 180
     enabled: bool = True
+    protect_test_files: bool = True
 
     @classmethod
     def from_dict(
@@ -65,6 +69,9 @@ class SWEBenchBatchCase:
         enabled = data.get("enabled", True)
         if not isinstance(enabled, bool):
             raise ValueError(f"enabled must be a boolean in {location}")
+        protect_test_files = data.get("protect_test_files", True)
+        if not isinstance(protect_test_files, bool):
+            raise ValueError(f"protect_test_files must be a boolean in {location}")
         max_steps = data.get("max_steps", 25)
         timeout = data.get("timeout", 180)
         if not isinstance(max_steps, int) or isinstance(max_steps, bool) or max_steps < 1:
@@ -105,6 +112,7 @@ class SWEBenchBatchCase:
             max_steps=max_steps,
             timeout=timeout,
             enabled=enabled,
+            protect_test_files=protect_test_files,
         )
 
     def snapshot(self) -> dict[str, Any]:
@@ -118,6 +126,7 @@ class SWEBenchBatchCase:
             "max_steps": self.max_steps,
             "timeout": self.timeout,
             "enabled": self.enabled,
+            "protect_test_files": self.protect_test_files,
         }
 
 
@@ -134,7 +143,7 @@ class SWEBenchBatchCaseResult:
     predictions_path: str | None
     patch_path: str | None
     trajectory_path: str | None
-    metrics: dict[str, int | float]
+    metrics: dict[str, int | float | bool]
     error_type: str | None = None
     error: str | None = None
 
@@ -352,6 +361,7 @@ class SWEBenchBatchRunner:
                 docker_cpus=self.docker_cpus,
                 docker_memory=self.docker_memory,
                 docker_pids_limit=self.docker_pids_limit,
+                protect_test_files=case.protect_test_files,
             )
             result = runner.run(instance, case.source_repo)
             return SWEBenchBatchCaseResult(
@@ -548,6 +558,10 @@ def build_batch_summary(
         for result in completed
         if int(result.metrics.get("first_edit_step", 0)) > 0
     ]
+    fresh_test_runs = sum(
+        bool(result.metrics.get("tests_run_after_latest_edit", False))
+        for result in completed
+    )
     resolved_ids = set(official_report.get("resolved_ids", [])) if official_report else set()
     unresolved_ids = set(official_report.get("unresolved_ids", [])) if official_report else set()
     error_ids = set(official_report.get("error_ids", [])) if official_report else set()
@@ -578,6 +592,21 @@ def build_batch_summary(
                 "agent_verified": result.agent_verified if result is not None else False,
                 "official_status": official_status,
                 "error_type": result.error_type if result is not None else None,
+                "protected_edit_attempts": (
+                    int(result.metrics.get("protected_edit_attempts", 0))
+                    if result is not None
+                    else 0
+                ),
+                "test_files_modified": (
+                    int(result.metrics.get("test_files_modified", 0))
+                    if result is not None
+                    else 0
+                ),
+                "tests_run_after_latest_edit": (
+                    bool(result.metrics.get("tests_run_after_latest_edit", False))
+                    if result is not None
+                    else False
+                ),
             }
         )
     total = len(cases)
@@ -624,6 +653,8 @@ def build_batch_summary(
                 metric_totals["replace_text_successes"],
                 metric_totals["replace_text_attempts"],
             ),
+            "runs_tested_after_latest_edit": fresh_test_runs,
+            "test_freshness_rate": _rate(fresh_test_runs, len(completed)),
         },
         "official": {
             "status": official_result.status if official_result is not None else "pending",

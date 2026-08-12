@@ -53,6 +53,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--docker-cpus", type=float, default=2.0)
     parser.add_argument("--docker-memory", default="4g")
     parser.add_argument("--docker-pids-limit", type=int, default=512)
+    parser.add_argument(
+        "--allow-test-file-edits",
+        action="store_true",
+        help="Disable the default SWE-bench protection against editing test files",
+    )
     parser.add_argument("--env-file", type=Path, default=Path(".env"))
     return parser
 
@@ -74,6 +79,7 @@ def main(argv: list[str] | None = None) -> int:
         docker_cpus=args.docker_cpus,
         docker_memory=args.docker_memory,
         docker_pids_limit=args.docker_pids_limit,
+        protect_test_files=not args.allow_test_file_edits,
     )
     result = runner.run(instance, args.source_repo)
     print(json.dumps(asdict(result), ensure_ascii=False, indent=2))

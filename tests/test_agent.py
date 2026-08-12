@@ -205,6 +205,198 @@ class AgentEndToEndTest(unittest.TestCase):
             self.assertEqual(result.metrics.replace_text_attempts, 1)
             self.assertEqual(result.metrics.replace_text_successes, 1)
             self.assertEqual(result.metrics.automatic_git_diff_calls, 1)
+            self.assertTrue(result.metrics.tests_run_after_latest_edit)
+            self.assertEqual(result.metrics.empty_diff_attempts, 0)
+
+    def test_protected_edit_is_counted_and_source_fix_can_recover(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            (root / "calculator.py").write_text(
+                "def add(a, b):\n    return a - b\n", encoding="utf-8"
+            )
+            (root / "test_calculator.py").write_text(
+                "import unittest\nfrom calculator import add\n\n"
+                "class CalculatorTest(unittest.TestCase):\n"
+                "    def test_add(self):\n        self.assertEqual(add(2, 3), 5)\n",
+                encoding="utf-8",
+            )
+            self._commit_baseline(root)
+            model = ScriptedModel([
+                {
+                    "tool": "replace_text",
+                    "arguments": {
+                        "path": "test_calculator.py",
+                        "old_text": "self.assertEqual(add(2, 3), 5)",
+                        "new_text": "self.assertEqual(add(2, 3), -1)",
+                    },
+                },
+                {
+                    "tool": "replace_text",
+                    "arguments": {
+                        "path": "calculator.py",
+                        "old_text": "return a - b",
+                        "new_text": "return a + b",
+                    },
+                },
+                {"tool": "run_tests", "arguments": {}},
+                {"final": "Fixed production code and verified it."},
+            ])
+
+            result = Agent(
+                model,
+                RepositoryTools(
+                    root,
+                    "python -m unittest -q",
+                    protect_test_files=True,
+                ),
+                root / "traces",
+                max_steps=8,
+            ).run("fix add")
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.metrics.protected_edit_attempts, 1)
+        self.assertEqual(result.metrics.test_files_modified, 0)
+        self.assertTrue(result.metrics.tests_run_after_latest_edit)
+
+    def test_restoring_baseline_cannot_pass_with_empty_diff(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            (root / "config.txt").write_text("mode=old\n", encoding="utf-8")
+            self._commit_baseline(root)
+            model = ScriptedModel([
+                {
+                    "tool": "replace_text",
+                    "arguments": {
+                        "path": "config.txt",
+                        "old_text": "mode=old",
+                        "new_text": "mode=new",
+                    },
+                },
+                {
+                    "tool": "replace_text",
+                    "arguments": {
+                        "path": "config.txt",
+                        "old_text": "mode=new",
+                        "new_text": "mode=old",
+                    },
+                },
+                {"tool": "run_tests", "arguments": {}},
+                {"final": "Done."},
+            ])
+
+            result = Agent(
+                model,
+                RepositoryTools(root, "python -c 'pass'"),
+                root / "traces",
+                max_steps=6,
+            ).run("change the configuration")
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.metrics.empty_diff_attempts, 1)
+        self.assertTrue(result.metrics.tests_run_after_latest_edit)
+
+    def test_edit_after_passing_test_requires_a_fresh_test_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            (root / "calculator.py").write_text(
+                "def add(a, b):\n    return a - b\n", encoding="utf-8"
+            )
+            (root / "test_calculator.py").write_text(
+                "import unittest\nfrom calculator import add\n\n"
+                "class CalculatorTest(unittest.TestCase):\n"
+                "    def test_add(self):\n        self.assertEqual(add(2, 3), 5)\n",
+                encoding="utf-8",
+            )
+            self._commit_baseline(root)
+            model = ScriptedModel([
+                {
+                    "tool": "replace_text",
+                    "arguments": {
+                        "path": "calculator.py",
+                        "old_text": "return a - b",
+                        "new_text": "return a + b",
+                    },
+                },
+                {"tool": "run_tests", "arguments": {}},
+                {
+                    "tool": "replace_text",
+                    "arguments": {
+                        "path": "calculator.py",
+                        "old_text": "def add(a, b):",
+                        "new_text": "def add(a, b):  # fixed",
+                    },
+                },
+                {"final": "Fixed."},
+            ])
+
+            result = Agent(
+                model,
+                RepositoryTools(root, "python -m unittest -q"),
+                root / "traces",
+                max_steps=6,
+            ).run("fix add")
+
+        self.assertFalse(result.success)
+        self.assertFalse(result.metrics.tests_run_after_latest_edit)
+
+    def test_unprotected_test_edit_is_visible_in_quality_metrics(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            (root / "calculator.py").write_text(
+                "def add(a, b):\n    return a - b\n", encoding="utf-8"
+            )
+            (root / "test_calculator.py").write_text(
+                "import unittest\nfrom calculator import add\n\n"
+                "class CalculatorTest(unittest.TestCase):\n"
+                "    def test_add(self):\n        self.assertEqual(add(2, 3), 5)\n",
+                encoding="utf-8",
+            )
+            self._commit_baseline(root)
+            model = ScriptedModel([
+                {
+                    "tool": "replace_text",
+                    "arguments": {
+                        "path": "test_calculator.py",
+                        "old_text": "self.assertEqual(add(2, 3), 5)",
+                        "new_text": "self.assertEqual(add(2, 3), -1)",
+                    },
+                },
+                {"tool": "run_tests", "arguments": {}},
+                {"tool": "git_diff", "arguments": {}},
+                {"final": "Updated the expected behavior."},
+            ])
+
+            result = Agent(
+                model,
+                RepositoryTools(root, "python -m unittest -q"),
+                root / "traces",
+                max_steps=6,
+            ).run("change the test expectation")
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.metrics.test_files_modified, 1)
+
+    @staticmethod
+    def _commit_baseline(root: Path) -> None:
+        subprocess.run(["git", "add", "--all"], cwd=root, check=True)
+        subprocess.run(
+            [
+                "git",
+                "-c",
+                "user.name=PatchPilot Test",
+                "-c",
+                "user.email=test@patchpilot.local",
+                "commit",
+                "-qm",
+                "baseline",
+            ],
+            cwd=root,
+            check=True,
+        )
 
 
 if __name__ == "__main__":

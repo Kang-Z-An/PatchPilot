@@ -24,7 +24,8 @@ Every run creates `results/<run-id>/` with `summary.json`, per-case JSON files,
 model/tool trajectories, and the final patches. The `results/` directory is
 ignored by Git. Summary metrics include tool failures, invalid actions, total
 edit attempts, unified-diff patch success rate, and exact-replacement success
-rate.
+rate. They also report protected edit attempts, empty final diffs, modified
+test files, and the share of runs tested after their latest edit.
 
 ## SWE-bench development manifest
 
@@ -54,6 +55,11 @@ observable behavior. It does not depend on SWE-bench's hidden `test_patch`.
 Before freezing the manifest, every reproduction was checked to fail on the
 pinned base image for the expected reason and to pass after applying the
 official gold patch.
+
+Batch SWE-bench cases protect conventional test files from Agent edits by
+default, even when `protect_test_files` is omitted from an older manifest.
+Protection is part of the generated run snapshot. A future case that genuinely
+requires test changes must opt out explicitly with `"protect_test_files": false`.
 
 Validate the instance files without requiring Docker images:
 
@@ -113,3 +119,14 @@ uv run --with swebench python -m patchpilot.evaluate_swebench_batch \
   --stage official \
   --run-dir /absolute/path/to/the/generated/run
 ```
+
+Audit the official per-test results and any gold-patch controls already stored
+under that run directory:
+
+```bash
+uv run python -m patchpilot.analyze_swebench_run \
+  --run-dir /absolute/path/to/the/generated/run
+```
+
+The audit is written to `<run-dir>/analysis/`. It preserves the official score;
+environment-suspect and test-file-change fields are diagnostic annotations.

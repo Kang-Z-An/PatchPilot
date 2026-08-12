@@ -59,8 +59,12 @@ class AgentMetrics:
     first_edit_step: int = 0
     budget_blocked_actions: int = 0
     automatic_git_diff_calls: int = 0
+    protected_edit_attempts: int = 0
+    empty_diff_attempts: int = 0
+    test_files_modified: int = 0
+    tests_run_after_latest_edit: bool = False
 
-    def as_dict(self) -> dict[str, int | float]:
+    def as_dict(self) -> dict[str, int | float | bool]:
         return {
             "tool_calls": self.tool_calls,
             "tool_failures": self.tool_failures,
@@ -82,6 +86,10 @@ class AgentMetrics:
             "first_edit_step": self.first_edit_step,
             "budget_blocked_actions": self.budget_blocked_actions,
             "automatic_git_diff_calls": self.automatic_git_diff_calls,
+            "protected_edit_attempts": self.protected_edit_attempts,
+            "empty_diff_attempts": self.empty_diff_attempts,
+            "test_files_modified": self.test_files_modified,
+            "tests_run_after_latest_edit": self.tests_run_after_latest_edit,
         }
 
     @staticmethod
@@ -102,6 +110,7 @@ class Agent:
         self.model = model
         self.tools = tools
         self.trajectory_dir = trajectory_dir
+        self.tools.ignore_diff_path(trajectory_dir)
         self.max_steps = max_steps
         self.edit_deadline = max(1, min(max_steps - 3, (max_steps * 3 + 4) // 5))
         self.max_inspection_streak = max(1, min(8, self.edit_deadline - 1))
@@ -140,6 +149,7 @@ class Agent:
         tests_passed = False
         patch_applied = False
         diff_inspected = False
+        tests_run_after_latest_edit = False
         counters = {
             "tool_calls": 0,
             "tool_failures": 0,
@@ -154,6 +164,10 @@ class Agent:
             "first_edit_step": 0,
             "budget_blocked_actions": 0,
             "automatic_git_diff_calls": 0,
+            "protected_edit_attempts": 0,
+            "empty_diff_attempts": 0,
+            "test_files_modified": 0,
+            "tests_run_after_latest_edit": False,
         }
         consecutive_inspections = 0
         for step in range(1, self.max_steps + 1):
@@ -177,6 +191,7 @@ class Agent:
                     counters["automatic_git_diff_calls"] += 1
                     if not automatic_diff.ok:
                         counters["tool_failures"] += 1
+                    self._record_diff_metrics(counters, automatic_diff)
                     diff_inspected = automatic_diff.ok
                     writer.record(
                         "tool_result",
@@ -185,9 +200,16 @@ class Agent:
                         arguments={},
                         ok=automatic_diff.ok,
                         output=automatic_diff.output,
+                        data=automatic_diff.data,
                         automatic=True,
                     )
-                verified = patch_applied and tests_passed and diff_inspected
+                counters["tests_run_after_latest_edit"] = tests_run_after_latest_edit
+                verified = (
+                    patch_applied
+                    and tests_passed
+                    and tests_run_after_latest_edit
+                    and diff_inspected
+                )
                 metrics = AgentMetrics(**counters)
                 writer.record(
                     "run_finished",
@@ -197,7 +219,10 @@ class Agent:
                     verification={
                         "edit_applied": patch_applied,
                         "tests_passed": tests_passed,
+                        "tests_run_after_latest_edit": tests_run_after_latest_edit,
                         "diff_inspected": diff_inspected,
+                        "non_empty_diff": diff_inspected,
+                        "test_files_modified": counters["test_files_modified"],
                     },
                     metrics=metrics.as_dict(),
                 )
@@ -241,11 +266,18 @@ class Agent:
                         counters["first_edit_step"] = step
                     patch_applied = True
                     tests_passed = False
+                    tests_run_after_latest_edit = False
                     diff_inspected = False
+                elif result.data.get("reason") == "protected_test_file":
+                    counters["protected_edit_attempts"] += 1
             elif name == "run_tests":
                 tests_passed = result.ok
-            elif name == "git_diff" and result.ok and patch_applied:
-                diff_inspected = True
+                if patch_applied:
+                    tests_run_after_latest_edit = True
+            elif name == "git_diff":
+                self._record_diff_metrics(counters, result)
+                if result.ok and patch_applied:
+                    diff_inspected = True
             remaining = self.max_steps - step
             observation = json.dumps(
                 {
@@ -257,6 +289,7 @@ class Agent:
                         "steps_remaining": remaining,
                         "edit_applied": patch_applied,
                         "tests_passed_after_latest_edit": tests_passed,
+                        "tests_run_after_latest_edit": tests_run_after_latest_edit,
                         "diff_inspected_after_latest_edit": diff_inspected,
                         "edit_deadline": self.edit_deadline,
                         "consecutive_inspections": consecutive_inspections,
@@ -280,6 +313,7 @@ class Agent:
                 arguments=arguments,
                 ok=result.ok,
                 output=result.output,
+                data=result.data,
             )
             messages.extend([
                 {"role": "assistant", "content": raw},
@@ -287,6 +321,7 @@ class Agent:
             ])
 
         answer = f"Stopped after reaching the {self.max_steps}-step limit."
+        counters["tests_run_after_latest_edit"] = tests_run_after_latest_edit
         metrics = AgentMetrics(**counters)
         writer.record(
             "run_stopped",
@@ -295,6 +330,17 @@ class Agent:
             metrics=metrics.as_dict(),
         )
         return AgentResult(False, answer, self.max_steps, writer.path, metrics)
+
+    @staticmethod
+    def _record_diff_metrics(
+        counters: dict[str, int | bool],
+        result: ToolResult,
+    ) -> None:
+        if result.data.get("reason") == "empty_diff":
+            counters["empty_diff_attempts"] = int(counters["empty_diff_attempts"]) + 1
+        test_files = result.data.get("test_files_modified")
+        if isinstance(test_files, list):
+            counters["test_files_modified"] = len(test_files)
 
     def _budget_restriction(
         self,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 
@@ -8,6 +8,7 @@ from typing import Any, Protocol
 class ToolResult:
     ok: bool
     output: str
+    data: dict[str, Any] = field(default_factory=dict)
 
 
 class Model(Protocol):
