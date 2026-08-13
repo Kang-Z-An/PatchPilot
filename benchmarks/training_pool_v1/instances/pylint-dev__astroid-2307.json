@@ -1,0 +1,18 @@
+{
+  "instance_id": "pylint-dev__astroid-2307",
+  "repo": "pylint-dev/astroid",
+  "base_commit": "1113d490ec4a94cdc1b35f45abfdaca9f19fa31e",
+  "problem_statement": "Regression in Astroid version 2.15.7 in handling subscriptable type parameters\nAstroid version 2.15.7 fails to correctly handle a subscriptable type parameter  most likely due to the change in this [PR](https://github.com/pylint-dev/astroid/pull/2239). \r\n\r\n### Steps to reproduce\r\n\r\n```python\r\nfrom collections.abc import Mapping\r\nfrom typing import Generic, TypeVar, TypedDict\r\nfrom dataclasses import dataclass\r\n\r\nclass Identity(TypedDict):\r\n    \"\"\"It's the identity.\"\"\"\r\n\r\n    name: str\r\n\r\nT = TypeVar(\"T\", bound=Mapping)\r\n\r\n@dataclass\r\nclass Animal(Generic[T]):\r\n    \"\"\"It's an animal.\"\"\"\r\n\r\n    identity: T\r\n\r\nclass Dog(Animal[Identity]):\r\n    \"\"\"It's a Dog.\"\"\"\r\n\r\ndog = Dog(identity=Identity(name=\"Dog\"))\r\nprint(dog.identity[\"name\"])\r\n```\r\n\r\n### Current behavior\r\nPylint (running Astroid 2.15.7) gives the following error for the example above:\r\n```\r\nE1136: Value 'dog.identity' is unsubscriptable (unsubscriptable-object)\r\n```\r\n### Expected behavior\r\nAstroid should correctly handle a subscriptable type parameter.\r\n\r\n\r\n### `python -c \"from astroid import __pkginfo__; print(__pkginfo__.version)\"` output\r\n2.15.7",
+  "version": "3.0",
+  "environment_setup_commit": "1113d490ec4a94cdc1b35f45abfdaca9f19fa31e",
+  "FAIL_TO_PASS": [
+    "tests/brain/test_typing.py::test_infer_typevar"
+  ],
+  "PASS_TO_PASS": [],
+  "pool_split": "train",
+  "source": {
+    "dataset": "princeton-nlp/SWE-bench",
+    "revision": "e48e2bd1e9fecd5bbd641e9414ac59da9f2e69f6",
+    "split": "dev"
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "dataset": "princeton-nlp/SWE-bench",
+  "dataset_revision": "e48e2bd1e9fecd5bbd641e9414ac59da9f2e69f6",
+  "source_split": "dev",
+  "platform": "linux/amd64",
+  "method": {
+    "baseline": "A non-empty marker-file patch forced the official harness to run tests without changing production behavior.",
+    "gold_control": "The official dataset patch was evaluated with the same instance image and harness.",
+    "acceptance_rule": "Baseline must be unresolved, gold must be resolved, and neither run may have an infrastructure error."
+  },
+  "initial_smoke": {
+    "instances": 6,
+    "images_built": 6,
+    "image_build_errors": 0,
+    "baseline_resolved": 0,
+    "baseline_unresolved": 6,
+    "baseline_errors": 0,
+    "gold_resolved": 4,
+    "gold_unresolved": 2,
+    "gold_errors": 0
+  },
+  "accepted": [
+    "marshmallow-code__marshmallow-1524",
+    "pydicom__pydicom-901",
+    "pylint-dev__astroid-1614",
+    "sqlfluff__sqlfluff-2625"
+  ],
+  "rejected": [
+    {
+      "instance_id": "pvlib__pvlib-python-1738",
+      "reason": "Gold patch applied but failed 4 target tests and 4 regression tests."
+    },
+    {
+      "instance_id": "pyvista__pyvista-4315",
+      "reason": "Gold patch applied but failed its target test and 114 regression tests."
+    }
+  ],
+  "ranked_replacement_controls": [
+    {
+      "instance_id": "pvlib__pvlib-python-1093",
+      "baseline_status": "unresolved",
+      "gold_status": "unresolved",
+      "gold_target_failures": 1,
+      "gold_regression_failures": 85
+    },
+    {
+      "instance_id": "pyvista__pyvista-4808",
+      "baseline_status": "unresolved",
+      "gold_status": "unresolved",
+      "gold_target_failures": 1,
+      "gold_regression_failures": 92
+    }
+  ],
+  "repository_decision": {
+    "excluded": [
+      "pvlib/pvlib-python",
+      "pyvista/pyvista"
+    ],
+    "reason": "Each repository had zero resolved gold controls across two deterministically ranked train instances, with large regression failure sets indicating environment drift."
+  },
+  "final_smoke": {
+    "repositories": 4,
+    "instances": 4,
+    "baseline_resolved": 0,
+    "baseline_unresolved": 4,
+    "gold_resolved": 4,
+    "gold_unresolved": 0,
+    "errors": 0
+  },
+  "score_policy": "Environment-invalid repositories are excluded from the future pool; no Agent score was generated or adjusted in this smoke test."
+}

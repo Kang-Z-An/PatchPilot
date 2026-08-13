@@ -242,6 +242,11 @@ class BenchmarkRunner:
                     tools,
                     trajectories_dir / case.id,
                     self.max_steps,
+                    trajectory_metadata={
+                        "task_id": case.id,
+                        "source": "local_benchmark",
+                        "model": self.model_name,
+                    },
                 ).run(case.issue)
                 trajectory_path = str(agent_result.trajectory_path)
                 diff = tools.git_diff({})

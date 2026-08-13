@@ -1,0 +1,306 @@
+{
+  "schema_version": 1,
+  "dataset": "princeton-nlp/SWE-bench",
+  "dataset_revision": "e48e2bd1e9fecd5bbd641e9414ac59da9f2e69f6",
+  "source_split": "dev",
+  "selection_seed": "patchpilot-training-pool-v1",
+  "exclusions": {
+    "verified_dataset": {
+      "dataset": "princeton-nlp/SWE-bench_Verified",
+      "revision": "c104f840cc67f8b6eec6f759ebc8b2693d585d4a",
+      "split": "test",
+      "instance_ids": 500
+    },
+    "local_reserved_ids": 9
+  },
+  "policy": {
+    "examples_per_repo": 6,
+    "train_per_repo": 4,
+    "dev_per_repo": 1,
+    "test_per_repo": 1,
+    "max_patch_files": 3,
+    "max_changed_lines": 80,
+    "max_target_tests": 5,
+    "problem_chars": [
+      100,
+      6000
+    ],
+    "python_source_only": true,
+    "gold_patches_excluded_from_instance_files": true,
+    "excluded_repositories": [
+      "pvlib/pvlib-python",
+      "pyvista/pyvista"
+    ]
+  },
+  "instances": [
+    {
+      "instance_id": "marshmallow-code__marshmallow-1252",
+      "repo": "marshmallow-code/marshmallow",
+      "pool_split": "dev",
+      "gold_patch_files": [
+        "src/marshmallow/utils.py"
+      ],
+      "gold_changed_lines": 3,
+      "target_test_count": 1,
+      "ranking_hash": "b109a925e4bb40798a9f1d5c49a586b32e1bce0face289b6d1e09f6c43af3847"
+    },
+    {
+      "instance_id": "pydicom__pydicom-839",
+      "repo": "pydicom/pydicom",
+      "pool_split": "dev",
+      "gold_patch_files": [
+        "pydicom/filewriter.py"
+      ],
+      "gold_changed_lines": 5,
+      "target_test_count": 3,
+      "ranking_hash": "466dfb1bc2a8750fbb44cf0e6eeebdd7a4206d184f17f73bd340cd7d70c58375"
+    },
+    {
+      "instance_id": "pylint-dev__astroid-1959",
+      "repo": "pylint-dev/astroid",
+      "pool_split": "dev",
+      "gold_patch_files": [
+        "astroid/raw_building.py"
+      ],
+      "gold_changed_lines": 13,
+      "target_test_count": 1,
+      "ranking_hash": "3a3a6f8f6e7c6cd81a9c0eb078a605dfd236b3bc0cf93bad0610d161aeb102e5"
+    },
+    {
+      "instance_id": "sqlfluff__sqlfluff-3435",
+      "repo": "sqlfluff/sqlfluff",
+      "pool_split": "dev",
+      "gold_patch_files": [
+        "src/sqlfluff/rules/L027.py"
+      ],
+      "gold_changed_lines": 17,
+      "target_test_count": 1,
+      "ranking_hash": "239fdabf512199801a14eed0c797d1af33c5761191d64ede4e4907c3433d1caf"
+    },
+    {
+      "instance_id": "marshmallow-code__marshmallow-1359",
+      "repo": "marshmallow-code/marshmallow",
+      "pool_split": "test",
+      "gold_patch_files": [
+        "src/marshmallow/fields.py"
+      ],
+      "gold_changed_lines": 2,
+      "target_test_count": 1,
+      "ranking_hash": "dab887aa3718a135bacf84650138bc971ad69e382b2df9f9ad8c135806254697"
+    },
+    {
+      "instance_id": "pydicom__pydicom-1194",
+      "repo": "pydicom/pydicom",
+      "pool_split": "test",
+      "gold_patch_files": [
+        "pydicom/filewriter.py"
+      ],
+      "gold_changed_lines": 6,
+      "target_test_count": 1,
+      "ranking_hash": "4ce9783a0f0a470bda75d6a2a73849f1f2bd1c8d079be349a2ee8f31a5ce56bb"
+    },
+    {
+      "instance_id": "pylint-dev__astroid-941",
+      "repo": "pylint-dev/astroid",
+      "pool_split": "test",
+      "gold_patch_files": [
+        "astroid/brain/brain_namedtuple_enum.py",
+        "astroid/scoped_nodes.py"
+      ],
+      "gold_changed_lines": 21,
+      "target_test_count": 2,
+      "ranking_hash": "3f27d5c500a5e8bfada8e39b0ad4e6fe6419b84fc705892e6384e2a5a6799c37"
+    },
+    {
+      "instance_id": "sqlfluff__sqlfluff-1577",
+      "repo": "sqlfluff/sqlfluff",
+      "pool_split": "test",
+      "gold_patch_files": [
+        "src/sqlfluff/core/templaters/base.py"
+      ],
+      "gold_changed_lines": 5,
+      "target_test_count": 1,
+      "ranking_hash": "29065e4a479c4603d13f6ac9ea82b90f2e4e3c1ed99f197efd60eed52a0cdf42"
+    },
+    {
+      "instance_id": "marshmallow-code__marshmallow-1164",
+      "repo": "marshmallow-code/marshmallow",
+      "pool_split": "train",
+      "gold_patch_files": [
+        "src/marshmallow/fields.py",
+        "src/marshmallow/schema.py"
+      ],
+      "gold_changed_lines": 19,
+      "target_test_count": 1,
+      "ranking_hash": "a0c90d248950b25eb7cb6b29ef653f44b971242c53704d09cba448a723ab04a9"
+    },
+    {
+      "instance_id": "marshmallow-code__marshmallow-1343",
+      "repo": "marshmallow-code/marshmallow",
+      "pool_split": "train",
+      "gold_patch_files": [
+        "src/marshmallow/schema.py"
+      ],
+      "gold_changed_lines": 4,
+      "target_test_count": 1,
+      "ranking_hash": "9c2d210f38ddcad641d81f5dd55d06f33f00eb8bdc879dcd99ff141d4e7299c7"
+    },
+    {
+      "instance_id": "marshmallow-code__marshmallow-1524",
+      "repo": "marshmallow-code/marshmallow",
+      "pool_split": "train",
+      "gold_patch_files": [
+        "src/marshmallow/validate.py"
+      ],
+      "gold_changed_lines": 10,
+      "target_test_count": 5,
+      "ranking_hash": "17013af9cdbcc350575dd73f6de9c88ec260c51a09eaef7f4e365e44c15a445c"
+    },
+    {
+      "instance_id": "marshmallow-code__marshmallow-1810",
+      "repo": "marshmallow-code/marshmallow",
+      "pool_split": "train",
+      "gold_patch_files": [
+        "src/marshmallow/base.py",
+        "src/marshmallow/fields.py"
+      ],
+      "gold_changed_lines": 17,
+      "target_test_count": 1,
+      "ranking_hash": "9ab0a4c4c886338ed2d31a0daa0934de28e1dfdb9e6db8370abfb14b11533c9d"
+    },
+    {
+      "instance_id": "pydicom__pydicom-1256",
+      "repo": "pydicom/pydicom",
+      "pool_split": "train",
+      "gold_patch_files": [
+        "pydicom/jsonrep.py"
+      ],
+      "gold_changed_lines": 3,
+      "target_test_count": 1,
+      "ranking_hash": "32a87f775fae2c2e10a7d24397a9661d0d260d7d730a8dac345c4da1b2fc1ad0"
+    },
+    {
+      "instance_id": "pydicom__pydicom-800",
+      "repo": "pydicom/pydicom",
+      "pool_split": "train",
+      "gold_patch_files": [
+        "pydicom/uid.py"
+      ],
+      "gold_changed_lines": 24,
+      "target_test_count": 1,
+      "ranking_hash": "16c7f7fbcf6a2dee9939cbc8df49e2af3c2a02a2abc4452a3b70a1af0d7f82bd"
+    },
+    {
+      "instance_id": "pydicom__pydicom-816",
+      "repo": "pydicom/pydicom",
+      "pool_split": "train",
+      "gold_patch_files": [
+        "pydicom/charset.py"
+      ],
+      "gold_changed_lines": 17,
+      "target_test_count": 3,
+      "ranking_hash": "0e2edc929b791da01179d7debc7826e25d4989b0d3bfbca41add0e6231ebc019"
+    },
+    {
+      "instance_id": "pydicom__pydicom-901",
+      "repo": "pydicom/pydicom",
+      "pool_split": "train",
+      "gold_patch_files": [
+        "pydicom/config.py"
+      ],
+      "gold_changed_lines": 28,
+      "target_test_count": 5,
+      "ranking_hash": "02efecb0c600754d3f844a65a2522a6e88d74a1cf3dc8fb5f0d710978dc35db3"
+    },
+    {
+      "instance_id": "pylint-dev__astroid-1614",
+      "repo": "pylint-dev/astroid",
+      "pool_split": "train",
+      "gold_patch_files": [
+        "astroid/brain/brain_builtin_inference.py"
+      ],
+      "gold_changed_lines": 2,
+      "target_test_count": 1,
+      "ranking_hash": "062c13d820aa43b01259c7d89aaff86aced7f61786e3413113e78c229c6f3fb7"
+    },
+    {
+      "instance_id": "pylint-dev__astroid-1978",
+      "repo": "pylint-dev/astroid",
+      "pool_split": "train",
+      "gold_patch_files": [
+        "astroid/raw_building.py"
+      ],
+      "gold_changed_lines": 27,
+      "target_test_count": 1,
+      "ranking_hash": "0d056b3dd1df6a74a2491f299e65d47fcb9a59bbff4315e56774a291335d6ff6"
+    },
+    {
+      "instance_id": "pylint-dev__astroid-2307",
+      "repo": "pylint-dev/astroid",
+      "pool_split": "train",
+      "gold_patch_files": [
+        "astroid/brain/brain_typing.py"
+      ],
+      "gold_changed_lines": 13,
+      "target_test_count": 1,
+      "ranking_hash": "2a955b00cff249dc3a6f66fdcb84b3520a54d7e6bb7845ab3c859d0aeb174dc4"
+    },
+    {
+      "instance_id": "pylint-dev__astroid-927",
+      "repo": "pylint-dev/astroid",
+      "pool_split": "train",
+      "gold_patch_files": [
+        "astroid/context.py"
+      ],
+      "gold_changed_lines": 2,
+      "target_test_count": 3,
+      "ranking_hash": "2a55d1f13165de5300b8d16940ba8cb21d0ac6c7cbc6c78e22e4e893c71f87ad"
+    },
+    {
+      "instance_id": "sqlfluff__sqlfluff-1517",
+      "repo": "sqlfluff/sqlfluff",
+      "pool_split": "train",
+      "gold_patch_files": [
+        "src/sqlfluff/core/parser/helpers.py"
+      ],
+      "gold_changed_lines": 11,
+      "target_test_count": 1,
+      "ranking_hash": "14db98b8ba641b7961cc78659b287335876f0c70cd09713646cbe0334f9d2bf3"
+    },
+    {
+      "instance_id": "sqlfluff__sqlfluff-2625",
+      "repo": "sqlfluff/sqlfluff",
+      "pool_split": "train",
+      "gold_patch_files": [
+        "src/sqlfluff/cli/commands.py"
+      ],
+      "gold_changed_lines": 59,
+      "target_test_count": 5,
+      "ranking_hash": "0d81ea71d820c1b843c23538802e01649e47b0e124e6879b36f3279d7686e267"
+    },
+    {
+      "instance_id": "sqlfluff__sqlfluff-2907",
+      "repo": "sqlfluff/sqlfluff",
+      "pool_split": "train",
+      "gold_patch_files": [
+        "src/sqlfluff/core/templaters/jinja.py"
+      ],
+      "gold_changed_lines": 35,
+      "target_test_count": 1,
+      "ranking_hash": "1852734580870363dc3b87071b8d93f61c08cc0ed07bb6bc839f3dd6223daada"
+    },
+    {
+      "instance_id": "sqlfluff__sqlfluff-4041",
+      "repo": "sqlfluff/sqlfluff",
+      "pool_split": "train",
+      "gold_patch_files": [
+        "src/sqlfluff/core/errors.py",
+        "src/sqlfluff/core/linter/linted_file.py",
+        "src/sqlfluff/core/linter/linter.py"
+      ],
+      "gold_changed_lines": 68,
+      "target_test_count": 1,
+      "ranking_hash": "1304ef34c78f832582c9e64bfcc372a14b095f533e6d54a0e06768939347378e"
+    }
+  ]
+}

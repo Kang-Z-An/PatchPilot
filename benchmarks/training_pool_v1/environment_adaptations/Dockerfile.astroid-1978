@@ -1,0 +1,14 @@
+FROM --platform=linux/amd64 sweb.eval.x86_64.pylint-dev__astroid-1959:compat
+
+RUN rm -rf /testbed
+COPY astroid-1978 /testbed
+RUN cd /testbed \
+    && test "$(git rev-parse HEAD)" = "0c9ab0fe56703fa83c73e514a1020d398d23fa7f" \
+    && git remote remove origin \
+    && /opt/miniconda3/envs/testbed/bin/python -m pip install \
+        --no-build-isolation --no-deps -e . \
+    && git config --global user.email setup@swebench.config \
+    && git config --global user.name SWE-bench \
+    && git commit --allow-empty -am SWE-bench
+
+WORKDIR /testbed

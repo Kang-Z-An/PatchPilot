@@ -64,7 +64,13 @@ def main(argv: list[str] | None = None) -> int:
         protect_test_files=args.protect_test_files,
     )
     model = OpenAICompatibleModel(model_name, api_key, base_url, args.timeout)
-    result = Agent(model, tools, trajectory_dir, args.max_steps).run(args.issue)
+    result = Agent(
+        model,
+        tools,
+        trajectory_dir,
+        args.max_steps,
+        trajectory_metadata={"source": "ad_hoc", "model": model_name},
+    ).run(args.issue)
     print(result.answer)
     print(f"trajectory: {result.trajectory_path}")
     return 0 if result.success else 1

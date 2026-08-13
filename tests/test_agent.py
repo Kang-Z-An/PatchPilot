@@ -137,8 +137,14 @@ class AgentEndToEndTest(unittest.TestCase):
             self.assertIn("return a + b", (root / "maths.py").read_text(encoding="utf-8"))
             events = [json.loads(line) for line in result.trajectory_path.read_text().splitlines()]
             self.assertEqual(events[0]["event"], "run_started")
+            self.assertEqual(events[0]["trajectory_schema_version"], 2)
+            self.assertEqual(events[0]["source"], "ad_hoc")
+            self.assertEqual(events[0]["model"], "unknown")
+            self.assertEqual(events[0]["initial_messages"][0]["role"], "system")
             self.assertEqual(events[-1]["event"], "run_finished")
             self.assertEqual(sum(event["event"] == "tool_result" for event in events), 5)
+            tool_events = [event for event in events if event["event"] == "tool_result"]
+            self.assertTrue(all(isinstance(event["observation"], str) for event in tool_events))
             self.assertEqual(result.metrics.patch_attempts, 1)
             self.assertEqual(result.metrics.patch_successes, 1)
             self.assertEqual(result.metrics.tool_failures, 0)

@@ -1,0 +1,13 @@
+FROM --platform=linux/amd64 sweb.env.py.x86_64.fe8326858e7fdc7d50d1e5:latest
+
+COPY astroid-1959 /testbed
+RUN cd /testbed \
+    && test "$(git rev-parse HEAD)" = "49691cc04f2d38b174787280f7ed38f818c828bd" \
+    && git remote remove origin \
+    && /opt/miniconda3/envs/testbed/bin/python -m pip install \
+        --no-build-isolation -e . \
+    && git config --global user.email setup@swebench.config \
+    && git config --global user.name SWE-bench \
+    && git commit --allow-empty -am SWE-bench
+
+WORKDIR /testbed

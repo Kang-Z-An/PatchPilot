@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -104,6 +105,7 @@ class Agent:
         tools: RepositoryTools,
         trajectory_dir: Path,
         max_steps: int = 20,
+        trajectory_metadata: dict[str, str] | None = None,
     ) -> None:
         if max_steps < 1:
             raise ValueError("max_steps must be positive")
@@ -112,20 +114,11 @@ class Agent:
         self.trajectory_dir = trajectory_dir
         self.tools.ignore_diff_path(trajectory_dir)
         self.max_steps = max_steps
+        self.trajectory_metadata = dict(trajectory_metadata or {})
         self.edit_deadline = max(1, min(max_steps - 3, (max_steps * 3 + 4) // 5))
         self.max_inspection_streak = max(1, min(8, self.edit_deadline - 1))
 
     def run(self, issue: str) -> AgentResult:
-        writer = TrajectoryWriter(
-            self.trajectory_dir,
-            {
-                "issue": issue,
-                "repository": str(self.tools.root),
-                "max_steps": self.max_steps,
-                "edit_deadline": self.edit_deadline,
-                "max_inspection_streak": self.max_inspection_streak,
-            },
-        )
         messages = [
             {
                 "role": "system",
@@ -146,6 +139,24 @@ class Agent:
                 ),
             },
         ]
+        task_id = self.trajectory_metadata.get("task_id") or (
+            "ad-hoc-" + hashlib.sha256(issue.encode("utf-8")).hexdigest()[:16]
+        )
+        writer = TrajectoryWriter(
+            self.trajectory_dir,
+            {
+                "trajectory_schema_version": 2,
+                "task_id": task_id,
+                "source": self.trajectory_metadata.get("source", "ad_hoc"),
+                "model": self.trajectory_metadata.get("model", "unknown"),
+                "issue": issue,
+                "repository": str(self.tools.root),
+                "max_steps": self.max_steps,
+                "edit_deadline": self.edit_deadline,
+                "max_inspection_streak": self.max_inspection_streak,
+                "initial_messages": messages,
+            },
+        )
         tests_passed = False
         patch_applied = False
         diff_inspected = False
@@ -177,7 +188,12 @@ class Agent:
             if error:
                 counters["invalid_actions"] += 1
                 observation = f"Invalid action: {error}. Return exactly one valid JSON object."
-                writer.record("invalid_action", step=step, error=error)
+                writer.record(
+                    "invalid_action",
+                    step=step,
+                    error=error,
+                    observation=observation,
+                )
                 messages.extend([
                     {"role": "assistant", "content": raw},
                     {"role": "user", "content": observation},
@@ -201,6 +217,7 @@ class Agent:
                         ok=automatic_diff.ok,
                         output=automatic_diff.output,
                         data=automatic_diff.data,
+                        observation=None,
                         automatic=True,
                     )
                 counters["tests_run_after_latest_edit"] = tests_run_after_latest_edit
@@ -314,6 +331,7 @@ class Agent:
                 ok=result.ok,
                 output=result.output,
                 data=result.data,
+                observation=observation,
             )
             messages.extend([
                 {"role": "assistant", "content": raw},

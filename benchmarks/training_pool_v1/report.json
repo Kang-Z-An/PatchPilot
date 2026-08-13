@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "source_records": 225,
+  "reserved_ids": 500,
+  "eligible_records": 94,
+  "eligible_repositories": 4,
+  "selected_records": 24,
+  "selected_repositories": 4,
+  "split_counts": {
+    "dev": 4,
+    "test": 4,
+    "train": 16
+  },
+  "repository_split_counts": {
+    "marshmallow-code/marshmallow": {
+      "dev": 1,
+      "test": 1,
+      "train": 4
+    },
+    "pydicom/pydicom": {
+      "dev": 1,
+      "test": 1,
+      "train": 4
+    },
+    "pylint-dev/astroid": {
+      "dev": 1,
+      "test": 1,
+      "train": 4
+    },
+    "sqlfluff/sqlfluff": {
+      "dev": 1,
+      "test": 1,
+      "train": 4
+    }
+  },
+  "rejection_reasons": {
+    "excluded_repository": 79,
+    "patch_too_large": 7,
+    "problem_length": 9,
+    "too_many_patch_files": 8,
+    "too_many_target_tests": 28
+  },
+  "exclusions": {
+    "verified_dataset": {
+      "dataset": "princeton-nlp/SWE-bench_Verified",
+      "revision": "c104f840cc67f8b6eec6f759ebc8b2693d585d4a",
+      "split": "test",
+      "instance_ids": 500
+    },
+    "local_reserved_ids": 9
+  }
+}

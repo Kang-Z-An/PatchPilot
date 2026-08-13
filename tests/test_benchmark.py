@@ -65,7 +65,14 @@ class BenchmarkTest(unittest.TestCase):
             self.assertEqual(summary["metrics"]["tool_failures"], 0)
             self.assertTrue(summary_path.is_file())
             case_result = summary["cases"][0]
-            self.assertTrue(Path(case_result["trajectory_path"]).is_file())
+            trajectory_path = Path(case_result["trajectory_path"])
+            self.assertTrue(trajectory_path.is_file())
+            trajectory_start = json.loads(
+                trajectory_path.read_text(encoding="utf-8").splitlines()[0]
+            )
+            self.assertEqual(trajectory_start["task_id"], "arithmetic_operator_001")
+            self.assertEqual(trajectory_start["source"], "local_benchmark")
+            self.assertEqual(trajectory_start["model"], "scripted-test-model")
             patch_path = Path(case_result["patch_path"])
             self.assertTrue(patch_path.is_file())
             self.assertIn("return a + b", patch_path.read_text(encoding="utf-8"))

@@ -1,0 +1,41 @@
+{
+  "instance_id": "pydicom__pydicom-1256",
+  "repo": "pydicom/pydicom",
+  "base_commit": "49a3da4a3d9c24d7e8427a25048a1c7d5c4f7724",
+  "problem_statement": "from_json does not correctly convert BulkDataURI's in SQ data elements\n**Describe the bug**\r\nWhen a DICOM object contains large data elements in SQ elements and is converted to JSON, those elements are correctly turned into BulkDataURI's. However, when the JSON is converted back to DICOM using from_json, the BulkDataURI's in SQ data elements are not converted back and warnings are thrown.\r\n\r\n**Expected behavior**\r\nThe BulkDataURI's in SQ data elements get converted back correctly.\r\n\r\n**Steps To Reproduce**\r\nTake the `waveform_ecg.dcm` in the test data, convert it to JSON, and then convert the JSON to DICOM\r\n\r\n**Your environment**\r\nmodule       | version\r\n------       | -------\r\nplatform     | macOS-10.15.7-x86_64-i386-64bit\r\nPython       | 3.8.2 (v3.8.2:7b3ab5921f, Feb 24 2020, 17:52:18)  [Clang 6.0 (clang-600.0.57)]\r\npydicom      | 2.1.0\r\ngdcm         | _module not found_\r\njpeg_ls      | _module not found_\r\nnumpy        | _module not found_\r\nPIL          | _module not found_\r\n\r\nThe problem is in `jsonrep.py` at line 227. I plan on submitting a pull-request today for this.",
+  "version": "2.1",
+  "environment_setup_commit": "506ecea8f378dc687d5c504788fc78810a190b7a",
+  "FAIL_TO_PASS": [
+    "pydicom/tests/test_json.py::TestBinary::test_bulk_data_reader_is_called_within_SQ"
+  ],
+  "PASS_TO_PASS": [
+    "pydicom/tests/test_json.py::TestPersonName::test_json_pn_from_file",
+    "pydicom/tests/test_json.py::TestPersonName::test_pn_components_to_json",
+    "pydicom/tests/test_json.py::TestPersonName::test_pn_components_from_json",
+    "pydicom/tests/test_json.py::TestPersonName::test_empty_value",
+    "pydicom/tests/test_json.py::TestPersonName::test_multi_value_to_json",
+    "pydicom/tests/test_json.py::TestPersonName::test_dataelem_from_json",
+    "pydicom/tests/test_json.py::TestAT::test_to_json",
+    "pydicom/tests/test_json.py::TestAT::test_from_json",
+    "pydicom/tests/test_json.py::TestAT::test_invalid_value_in_json",
+    "pydicom/tests/test_json.py::TestAT::test_invalid_tag_in_json",
+    "pydicom/tests/test_json.py::TestDataSetToJson::test_json_from_dicom_file",
+    "pydicom/tests/test_json.py::TestDataSetToJson::test_roundtrip",
+    "pydicom/tests/test_json.py::TestDataSetToJson::test_dataset_dumphandler",
+    "pydicom/tests/test_json.py::TestDataSetToJson::test_dataelement_dumphandler",
+    "pydicom/tests/test_json.py::TestDataSetToJson::test_sort_order",
+    "pydicom/tests/test_json.py::TestSequence::test_nested_sequences",
+    "pydicom/tests/test_json.py::TestBinary::test_inline_binary",
+    "pydicom/tests/test_json.py::TestBinary::test_invalid_inline_binary",
+    "pydicom/tests/test_json.py::TestBinary::test_valid_bulkdata_uri",
+    "pydicom/tests/test_json.py::TestBinary::test_invalid_bulkdata_uri",
+    "pydicom/tests/test_json.py::TestBinary::test_bulk_data_reader_is_called",
+    "pydicom/tests/test_json.py::TestBinary::test_bulk_data_reader_is_called_2"
+  ],
+  "pool_split": "train",
+  "source": {
+    "dataset": "princeton-nlp/SWE-bench",
+    "revision": "e48e2bd1e9fecd5bbd641e9414ac59da9f2e69f6",
+    "split": "dev"
+  }
+}

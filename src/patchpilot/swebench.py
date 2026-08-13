@@ -275,6 +275,11 @@ class SWEBenchRunner:
             tools,
             run_dir / "trajectory",
             self.max_steps,
+            trajectory_metadata={
+                "task_id": instance.instance_id,
+                "source": "swebench",
+                "model": self.model_name,
+            },
         ).run(instance.problem_statement)
 
         patch = collect_git_diff(repo)

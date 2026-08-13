@@ -102,7 +102,14 @@ class SWEBenchTest(unittest.TestCase):
             self.assertEqual(prediction["instance_id"], instance.instance_id)
             self.assertEqual(prediction["model_name_or_path"], "scripted-model")
             self.assertIn("return a + b", prediction["model_patch"])
-            self.assertTrue(Path(result.trajectory_path).is_file())
+            trajectory_path = Path(result.trajectory_path)
+            self.assertTrue(trajectory_path.is_file())
+            trajectory_start = json.loads(
+                trajectory_path.read_text(encoding="utf-8").splitlines()[0]
+            )
+            self.assertEqual(trajectory_start["task_id"], "example__repo-1")
+            self.assertEqual(trajectory_start["source"], "swebench")
+            self.assertEqual(trajectory_start["model"], "scripted-model")
 
     @staticmethod
     def _git(cwd: Path, *arguments: str) -> subprocess.CompletedProcess[str]:

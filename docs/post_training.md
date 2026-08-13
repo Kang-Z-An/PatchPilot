@@ -1,0 +1,121 @@
+# PatchPilot post-training pipeline
+
+PatchPilot's post-training phase starts with data quality, not with launching a
+GPU job. A trained model is only comparable with the v0.5.0 Agent baseline when
+the examples are reconstructable, tasks do not leak between splits, and the
+same frozen evaluator is used before and after training.
+
+## Data flow
+
+```text
+Agent run
+  -> schema-v2 trajectory
+  -> verification and safety filters
+  -> task-level deterministic split
+  -> train/dev/test chat JSONL
+  -> SFT/LoRA
+  -> frozen local + SWE-bench evaluation
+```
+
+## Trajectory contract
+
+Schema-v2 `run_started` events include:
+
+- `initial_messages`: the exact system and user messages sent to the model;
+- `task_id`: stable benchmark identity used as the split unit;
+- `source`: for example `local_benchmark`, `swebench`, or `ad_hoc`;
+- `model`: the model that generated the trajectory;
+- the issue, step budget, and inspection/edit limits.
+
+Every non-automatic `tool_result` and `invalid_action` stores the exact
+`observation` returned to the model. Interleaving these events with
+`model_output` events reproduces the supervised chat sequence. Automatic final
+diff verification is retained as audit evidence but is not inserted after the
+model's final answer.
+
+Pre-v2 trajectories do not contain this information. The exporter can build an
+approximate conversation from their event logs only when `--allow-legacy` is
+explicitly supplied. Such records carry `fidelity=legacy_approximate`.
+
+## Default quality gates
+
+A strict SFT sample must satisfy all available evidence:
+
+1. The terminal event is `run_finished` with `verified=true`.
+2. A successful edit, fresh passing tests, and non-empty diff inspection are
+   present in schema-v2 verification metadata.
+3. If an official benchmark status exists, it is not unresolved or error.
+4. The final patch does not modify a conventional test file.
+5. Invalid actions and tool-failure rate stay within configured limits.
+6. No recognizable API key or authorization secret appears in the conversation.
+7. An identical conversation has not already been exported.
+
+Samples are assigned by a seeded hash of `task_id`. Adding another attempt for
+an existing task cannot put that task into a different split.
+
+## Current local corpus audit
+
+The first audit scanned 24 historical trajectories:
+
+- strict exact mode: **0 accepted** because all completed historical runs
+  predate schema v2;
+- explicit legacy audit: **5 approximate candidates** across five tasks;
+- 19 were rejected due to incomplete/malformed runs, unknown test-edit status,
+  actual test-file edits, or an invalid-action quality threshold.
+
+The five legacy candidates are evidence that the converter works, not a useful
+training corpus. Four landed in train and one in test under the current stable
+hash; dev is empty because the corpus is tiny. No SFT result should be claimed
+from this dataset.
+
+Reproduce the two audits:
+
+```bash
+uv run python -m patchpilot.export_training_data \
+  --input .patchpilot/swebench \
+  --input benchmarks/results \
+  --output-dir .patchpilot/training/strict-v1
+
+uv run python -m patchpilot.export_training_data \
+  --input .patchpilot/swebench \
+  --input benchmarks/results \
+  --output-dir .patchpilot/training/legacy-audit-v1 \
+  --allow-legacy
+```
+
+Generated datasets remain under Git-ignored `.patchpilot/`; only aggregate,
+non-sensitive experiment reports should be versioned.
+
+## Next training sequence
+
+The first task pool is now frozen in
+`benchmarks/training_pool_v1/`: 24 source-only Python tasks from the official
+SWE-bench `dev` split, balanced across four repositories as 16 train, 4 dev, and
+4 test tasks. It has no instance overlap with `benchmarks/swebench/`. Separate
+manifests make accidental rollout collection on a held-out task less likely.
+An official Docker smoke test retained repositories only when a non-empty
+marker baseline was unresolved and the dataset gold patch was resolved. The
+four retained repositories passed 0/4 baseline and 4/4 gold controls with zero
+infrastructure errors. Two initially considered repositories were excluded
+after two gold controls per repository showed systematic environment drift;
+the evidence is frozen in `benchmarks/training_pool_v1/smoke_report.json`.
+
+1. Prepare Docker images and validate gold-patch execution for all 24 tasks
+   before paying for model rollouts. Remove or replace environment-invalid cases
+   through a versioned selection update, never silently.
+2. Collect schema-v2 trajectories from `manifest_train.jsonl`, retaining failed
+   attempts separately for later preference construction. Do not export dev or
+   test trajectories into SFT data.
+3. Freeze the surviving held-out task set before training. Never select examples
+   after looking at trained-model answers.
+4. Train a small SFT/LoRA pilot and save the base-model revision, tokenizer,
+   prompt template, adapter configuration, seed, and dataset report.
+5. Compare base and trained models using the same Agent code, tool policy, step
+   budget, local benchmark, and frozen SWE-bench subset.
+6. Report official resolution as the primary outcome, with steps, duration,
+   invalid actions, tool failures, edit success, and test freshness as process
+   metrics.
+7. Only after the SFT baseline is stable, construct chosen/rejected pairs for
+   preference optimization or reward-guided methods. Do not manufacture GRPO
+   rewards before the evaluator can reliably distinguish correct patches from
+   environment failures.

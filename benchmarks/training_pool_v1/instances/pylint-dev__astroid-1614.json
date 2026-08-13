@@ -1,0 +1,28 @@
+{
+  "instance_id": "pylint-dev__astroid-1614",
+  "repo": "pylint-dev/astroid",
+  "base_commit": "aa5a0d92e640ee5f3fa9a8ba3ba058a7b594ca44",
+  "problem_statement": "Crash when inferring `str.format` call involving unpacking kwargs\nWhen parsing the following file:\r\n\r\n<!--\r\n If sharing the code is not an option, please state so,\r\n but providing only the stacktrace would still be helpful.\r\n -->\r\n\r\n```python\r\nclass A:\r\n    def render(self, audit_log_entry: AuditLogEntry):\r\n        return \"joined team {team_slug}\".format(**audit_log_entry.data)\r\n\r\n\r\n\r\n```\r\n\r\npylint crashed with a ``AstroidError`` and with the following stacktrace:\r\n```\r\nTraceback (most recent call last):\r\n  File \"/Users/.../astroid/astroid/inference_tip.py\", line 38, in _inference_tip_cached\r\n    result = _cache[func, node]\r\nKeyError: (<function _infer_str_format_call at 0x1064a96c0>, <Call l.3 at 0x106c452d0>)\r\n\r\nDuring handling of the above exception, another exception occurred:\r\n\r\nTraceback (most recent call last):\r\n  File \"/Users/.../pylint/pylint/lint/pylinter.py\", line 731, in _check_file\r\n    check_astroid_module(ast_node)\r\n  File \"/Users/.../pylint/pylint/lint/pylinter.py\", line 950, in check_astroid_module\r\n    retval = self._check_astroid_module(\r\n  File \"/Users/.../pylint/pylint/lint/pylinter.py\", line 1000, in _check_astroid_module\r\n    walker.walk(node)\r\n  File \"/Users/.../pylint/pylint/utils/ast_walker.py\", line 93, in walk\r\n    self.walk(child)\r\n  File \"/Users/.../pylint/pylint/utils/ast_walker.py\", line 93, in walk\r\n    self.walk(child)\r\n  File \"/Users/.../pylint/pylint/utils/ast_walker.py\", line 90, in walk\r\n    callback(astroid)\r\n  File \"/Users/.../pylint/pylint/checkers/classes/special_methods_checker.py\", line 170, in visit_functiondef\r\n    inferred = _safe_infer_call_result(node, node)\r\n  File \"/Users/.../pylint/pylint/checkers/classes/special_methods_checker.py\", line 31, in _safe_infer_call_result\r\n    value = next(inferit)\r\n  File \"/Users/.../astroid/astroid/nodes/scoped_nodes/scoped_nodes.py\", line 1752, in infer_call_result\r\n    yield from returnnode.value.infer(context)\r\n  File \"/Users/.../astroid/astroid/nodes/node_ng.py\", line 159, in infer\r\n    results = list(self._explicit_inference(self, context, **kwargs))\r\n  File \"/Users/.../astroid/astroid/inference_tip.py\", line 45, in _inference_tip_cached\r\n    result = _cache[func, node] = list(func(*args, **kwargs))\r\n  File \"/Users/.../astroid/astroid/brain/brain_builtin_inference.py\", line 948, in _infer_str_format_call\r\n    formatted_string = format_template.format(*pos_values, **keyword_values)\r\nKeyError: 'team_slug'\r\n\r\nThe above exception was the direct cause of the following exception:\r\n\r\nTraceback (most recent call last):\r\n  File \"/Users/.../pylint/pylint/lint/pylinter.py\", line 688, in _check_files\r\n    self._check_file(get_ast, check_astroid_module, file)\r\n  File \"/Users/.../pylint/pylint/lint/pylinter.py\", line 733, in _check_file\r\n    raise astroid.AstroidError from e\r\nastroid.exceptions.AstroidError\r\n```\r\n***\r\ncc @DanielNoord in #1602 \r\nfound by pylint primer 🚀",
+  "version": "2.12",
+  "environment_setup_commit": "52f6d2d7722db383af035be929f18af5e9fe8cd5",
+  "FAIL_TO_PASS": [
+    "tests/unittest_brain_builtin.py::TestStringNodes::test_string_format_uninferable[\\n"
+  ],
+  "PASS_TO_PASS": [
+    "tests/unittest_brain_builtin.py::BuiltinsTest::test_infer_property",
+    "tests/unittest_brain_builtin.py::TestStringNodes::test_string_format[empty-indexes]",
+    "tests/unittest_brain_builtin.py::TestStringNodes::test_string_format[numbered-indexes]",
+    "tests/unittest_brain_builtin.py::TestStringNodes::test_string_format[named-indexes]",
+    "tests/unittest_brain_builtin.py::TestStringNodes::test_string_format[numbered-indexes-from-positional]",
+    "tests/unittest_brain_builtin.py::TestStringNodes::test_string_format[named-indexes-from-keyword]",
+    "tests/unittest_brain_builtin.py::TestStringNodes::test_string_format[mixed-indexes-from-mixed]",
+    "tests/unittest_brain_builtin.py::TestStringNodes::test_string_format_uninferable[\"I",
+    "tests/unittest_brain_builtin.py::TestStringNodes::test_string_format_with_specs"
+  ],
+  "pool_split": "train",
+  "source": {
+    "dataset": "princeton-nlp/SWE-bench",
+    "revision": "e48e2bd1e9fecd5bbd641e9414ac59da9f2e69f6",
+    "split": "dev"
+  }
+}

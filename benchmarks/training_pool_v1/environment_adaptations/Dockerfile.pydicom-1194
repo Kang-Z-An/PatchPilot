@@ -1,0 +1,13 @@
+FROM --platform=linux/amd64 sweb.eval.x86_64.pydicom__pydicom-1194:latest
+
+RUN /opt/miniconda3/envs/testbed/bin/python -m pip install --no-cache-dir \
+    'pytest==7.4.4'
+RUN mkdir -p /root/.pydicom/data
+COPY color-pl.dcm /root/.pydicom/data/color-pl.dcm
+COPY SC_rgb.dcm /root/.pydicom/data/SC_rgb.dcm
+RUN printf '%s  %s\n' \
+    '16bfc3134e59d789985efddfc70d924420b16e1c6d1f21c960bb4544c9e9dbf9' \
+    '/root/.pydicom/data/color-pl.dcm' | sha256sum --check \
+    && printf '%s  %s\n' \
+    'b0f868d6a689a0ff96c39b459caf1b628eacd74134114ce84549573321231138' \
+    '/root/.pydicom/data/SC_rgb.dcm' | sha256sum --check

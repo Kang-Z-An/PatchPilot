@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "pool": "patchpilot-training-pool-v1",
+  "dataset": "princeton-nlp/SWE-bench",
+  "dataset_revision": "e48e2bd1e9fecd5bbd641e9414ac59da9f2e69f6",
+  "source_split": "dev",
+  "total_instances": 24,
+  "resolved_instances": 24,
+  "unresolved_instances": 0,
+  "error_instances": 0,
+  "gold_resolve_rate": 1.0,
+  "official_latest_image_instances": 19,
+  "environment_adapted_instances": 5,
+  "resolved_ids": [
+    "marshmallow-code__marshmallow-1164",
+    "marshmallow-code__marshmallow-1252",
+    "marshmallow-code__marshmallow-1343",
+    "marshmallow-code__marshmallow-1359",
+    "marshmallow-code__marshmallow-1524",
+    "marshmallow-code__marshmallow-1810",
+    "pydicom__pydicom-1194",
+    "pydicom__pydicom-1256",
+    "pydicom__pydicom-800",
+    "pydicom__pydicom-816",
+    "pydicom__pydicom-839",
+    "pydicom__pydicom-901",
+    "pylint-dev__astroid-1614",
+    "pylint-dev__astroid-1959",
+    "pylint-dev__astroid-1978",
+    "pylint-dev__astroid-2307",
+    "pylint-dev__astroid-927",
+    "pylint-dev__astroid-941",
+    "sqlfluff__sqlfluff-1517",
+    "sqlfluff__sqlfluff-1577",
+    "sqlfluff__sqlfluff-2625",
+    "sqlfluff__sqlfluff-2907",
+    "sqlfluff__sqlfluff-3435",
+    "sqlfluff__sqlfluff-4041"
+  ],
+  "environment_adaptations": [
+    {
+      "instance_id": "marshmallow-code__marshmallow-1810",
+      "image_tag": "compat",
+      "reason": "Commit-pinned shallow history plus already qualified same-repository test dependencies; target source installed editable.",
+      "source_tree_matches_base": true,
+      "gold_patch_baked_into_image": false
+    },
+    {
+      "instance_id": "pydicom__pydicom-1194",
+      "image_tag": "precache",
+      "reason": "pytest 7.4.4 preserves legacy setup/teardown hooks; two public test assets are cached with declared SHA-256 checks.",
+      "source_tree_matches_base": true,
+      "gold_patch_baked_into_image": false
+    },
+    {
+      "instance_id": "pylint-dev__astroid-1959",
+      "image_tag": "compat",
+      "reason": "Build isolation disabled so a PEP 660-capable setuptools backend performs the editable install.",
+      "source_tree_matches_base": true,
+      "gold_patch_baked_into_image": false
+    },
+    {
+      "instance_id": "pylint-dev__astroid-1978",
+      "image_tag": "compat",
+      "reason": "Same editable-install compatibility with the already qualified astroid dependency layer.",
+      "source_tree_matches_base": true,
+      "gold_patch_baked_into_image": false
+    },
+    {
+      "instance_id": "sqlfluff__sqlfluff-4041",
+      "image_tag": "localcache",
+      "reason": "Commit-pinned shallow source plus already qualified same-repository Python dependencies; target source installed editable.",
+      "source_tree_matches_base": true,
+      "gold_patch_baked_into_image": false
+    }
+  ],
+  "acceptance_rule": "Every selected instance must resolve with its official gold patch and zero harness errors; environment-only adaptations must preserve the base source tree and contain no gold patch."
+}

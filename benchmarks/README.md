@@ -130,3 +130,14 @@ uv run python -m patchpilot.analyze_swebench_run \
 
 The audit is written to `<run-dir>/analysis/`. It preserves the official score;
 environment-suspect and test-file-change fields are diagnostic annotations.
+
+## Post-training pool
+
+`training_pool_v1/` freezes 24 official SWE-bench `dev` tasks for the
+post-training phase, split into physically separate train/dev/test manifests.
+The selection is balanced across four repositories, contains no gold patches in
+Agent-facing instance files, and does not overlap the existing Verified pilot.
+An official Docker smoke test excluded two initially considered repositories
+whose gold controls showed systematic environment drift.
+See [`training_pool_v1/README.md`](training_pool_v1/README.md) before preparing
+images or collecting trajectories.

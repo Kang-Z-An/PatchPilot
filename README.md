@@ -21,7 +21,8 @@ boundaries, prompts, and traces are all visible in this repository.
 - `git_diff` inspection
 - OpenAI-compatible chat-completions client
 - Deterministic fake model for offline end-to-end tests
-- JSONL trajectories suitable for later data processing
+- Schema-v2 JSONL trajectories that preserve the exact model conversation
+- Audited SFT chat-data export with quality filters and task-level data splits
 
 ## Quick start
 
@@ -104,7 +105,9 @@ is planned, not claimed by this MVP.
 2. Add hybrid retrieval (lexical first, embeddings as an experiment).
 3. Expand from one validated SWE-bench Verified instance to a pinned subset.
 4. Add automated official-image preparation and batch evaluation.
-5. Convert trajectories into SFT and preference datasets.
+5. Build an audited, leakage-resistant SFT trajectory exporter. (implemented)
+6. Collect a larger exact-trajectory corpus, run SFT/LoRA, and compare it with
+   the frozen pre-training baseline.
 
 ## Local benchmark
 
@@ -118,6 +121,38 @@ uv run python -m patchpilot.evaluate \
 ```
 
 See `benchmarks/README.md` for case selection and output details.
+
+## Post-training data
+
+New runs write trajectory schema v2. In addition to model outputs and tool
+results, it records the exact initial messages and each observation sent back to
+the model, plus stable `task_id`, source, and model metadata. This makes the chat
+conversation reconstructable without guessing which prompt version was used.
+
+Export verified trajectories into OpenAI-style chat JSONL files:
+
+```bash
+uv run python -m patchpilot.export_training_data \
+  --input .patchpilot/swebench \
+  --input benchmarks/results \
+  --output-dir .patchpilot/training/strict-v1
+```
+
+The output directory contains `train.jsonl`, `dev.jsonl`, `test.jsonl`, and
+`report.json`. The strict default rejects legacy trajectories, unsuccessful or
+incompletely verified runs, known official failures, test-modifying patches,
+high tool-failure/invalid-action runs, and conversations containing recognizable
+secret patterns. Absolute repository paths are replaced with `<REPOSITORY>`.
+
+All attempts for the same `task_id` are assigned to the same deterministic
+split, preventing repeated runs of one benchmark issue from leaking across
+train/dev/test. Old schema-v1 traces can be audited with `--allow-legacy`, but
+they are labeled `legacy_approximate` and should not be mixed silently with
+exact training examples.
+
+See [`docs/post_training.md`](docs/post_training.md) for the data contract,
+current corpus audit, frozen 24-task training pool, and the SFT/LoRA evaluation
+sequence.
 
 ## SWE-bench adapter
 

@@ -1,0 +1,49 @@
+{
+  "instance_id": "sqlfluff__sqlfluff-1577",
+  "repo": "sqlfluff/sqlfluff",
+  "base_commit": "500505877769ab02504427284e4efdf832d299ea",
+  "problem_statement": "\"ValueError: Position Not Found\" with macro spanning entire file\n## Expected Behaviour\r\n\r\n`sqlfluff parse` should probably not fail with an exception and stack trace.\r\n\r\n## Observed Behaviour\r\n\r\n`sqlfluff parse` throws an exception, given an input file which is entirely spanned by a Jinja macro.\r\n\r\n## Steps to Reproduce\r\n\r\n```console\r\n$ echo -n '{% macro foo() %}{% endmacro %}' | sqlfluff parse -\r\nTraceback (most recent call last):\r\n  File \"/home/vladimir/work/extern/sqlfluff/venv/bin/sqlfluff\", line 33, in <module>\r\n    sys.exit(load_entry_point('sqlfluff', 'console_scripts', 'sqlfluff')())\r\n  File \"/home/vladimir/work/extern/sqlfluff/venv/lib/python3.9/site-packages/click/core.py\", line 1137, in __call__\r\n    return self.main(*args, **kwargs)\r\n  File \"/home/vladimir/work/extern/sqlfluff/venv/lib/python3.9/site-packages/click/core.py\", line 1062, in main\r\n    rv = self.invoke(ctx)\r\n  File \"/home/vladimir/work/extern/sqlfluff/venv/lib/python3.9/site-packages/click/core.py\", line 1668, in invoke\r\n    return _process_result(sub_ctx.command.invoke(sub_ctx))\r\n  File \"/home/vladimir/work/extern/sqlfluff/venv/lib/python3.9/site-packages/click/core.py\", line 1404, in invoke\r\n    return ctx.invoke(self.callback, **ctx.params)\r\n  File \"/home/vladimir/work/extern/sqlfluff/venv/lib/python3.9/site-packages/click/core.py\", line 763, in invoke\r\n    return __callback(*args, **kwargs)\r\n  File \"/home/vladimir/work/extern/sqlfluff/src/sqlfluff/cli/commands.py\", line 701, in parse\r\n    lnt.parse_string(\r\n  File \"/home/vladimir/work/extern/sqlfluff/src/sqlfluff/core/linter/linter.py\", line 596, in parse_string\r\n    return self.parse_rendered(rendered, recurse=recurse)\r\n  File \"/home/vladimir/work/extern/sqlfluff/src/sqlfluff/core/linter/linter.py\", line 294, in parse_rendered\r\n    tokens, lvs, config = cls._lex_templated_file(\r\n  File \"/home/vladimir/work/extern/sqlfluff/src/sqlfluff/core/linter/linter.py\", line 127, in _lex_templated_file\r\n    tokens, lex_vs = lexer.lex(templated_file)\r\n  File \"/home/vladimir/work/extern/sqlfluff/src/sqlfluff/core/parser/lexer.py\", line 319, in lex\r\n    segments: Tuple[RawSegment, ...] = self.elements_to_segments(\r\n  File \"/home/vladimir/work/extern/sqlfluff/src/sqlfluff/core/parser/lexer.py\", line 346, in elements_to_segments\r\n    source_slice = templated_file.templated_slice_to_source_slice(\r\n  File \"/home/vladimir/work/extern/sqlfluff/src/sqlfluff/core/templaters/base.py\", line 319, in templated_slice_to_source_slice\r\n    ts_stop_sf_start, ts_stop_sf_stop = self._find_slice_indices_of_templated_pos(\r\n  File \"/home/vladimir/work/extern/sqlfluff/src/sqlfluff/core/templaters/base.py\", line 214, in _find_slice_indices_of_templated_pos\r\n    raise ValueError(\"Position Not Found\")\r\nValueError: Position Not Found\r\n```\r\n\r\nNote: the issue does not occur if the file ends with a newline. \r\n\r\nThe contents of the macro also doesn't matter.\r\n\r\n## Dialect\r\n\r\nNone specified\r\n\r\n## Version\r\nSQLFluff 6011bdbe05669b075045e8127cdf18cc537686d4, Python 3.9.6\r\n\r\n## Configuration\r\n\r\nNone",
+  "version": "0.6",
+  "environment_setup_commit": "67023b85c41d23d6c6d69812a41b207c4f8a9331",
+  "FAIL_TO_PASS": [
+    "test/core/templaters/jinja_test.py::test__templater_jinja_lint_empty"
+  ],
+  "PASS_TO_PASS": [
+    "test/core/templaters/jinja_test.py::test__templater_jinja[simple]",
+    "test/core/templaters/jinja_test.py::test__templater_jinja[unboundlocal_bugfix]",
+    "test/core/templaters/jinja_test.py::test__templater_jinja_error_variable",
+    "test/core/templaters/jinja_test.py::test__templater_jinja_error_syntax",
+    "test/core/templaters/jinja_test.py::test__templater_jinja_error_catatrophic",
+    "test/core/templaters/jinja_test.py::test__templater_full[jinja_a/jinja-True-False]",
+    "test/core/templaters/jinja_test.py::test__templater_full[jinja_b/jinja-False-False]",
+    "test/core/templaters/jinja_test.py::test__templater_full[jinja_c_dbt/dbt_builtins-True-False]",
+    "test/core/templaters/jinja_test.py::test__templater_full[jinja_c_dbt/var_default-True-False]",
+    "test/core/templaters/jinja_test.py::test__templater_full[jinja_e/jinja-True-False]",
+    "test/core/templaters/jinja_test.py::test__templater_full[jinja_f/jinja-True-False]",
+    "test/core/templaters/jinja_test.py::test__templater_full[jinja_g_macros/jinja-True-False]",
+    "test/core/templaters/jinja_test.py::test__templater_full[jinja_h_macros/jinja-True-False]",
+    "test/core/templaters/jinja_test.py::test__templater_full[jinja_i_raw/raw_tag-True-False]",
+    "test/core/templaters/jinja_test.py::test__templater_full[jinja_i_raw/raw_tag_2-True-False]",
+    "test/core/templaters/jinja_test.py::test__templater_full[jinja_j_libraries/jinja-True-False]",
+    "test/core/templaters/jinja_test.py::test__templater_full[jinja_k_config_override_path_macros/jinja-True-False]",
+    "test/core/templaters/jinja_test.py::test__templater_full[jinja_l_metas/001-False-True]",
+    "test/core/templaters/jinja_test.py::test__templater_full[jinja_l_metas/002-False-True]",
+    "test/core/templaters/jinja_test.py::test__templater_jinja_slice_template[-result0]",
+    "test/core/templaters/jinja_test.py::test__templater_jinja_slice_template[foo-result1]",
+    "test/core/templaters/jinja_test.py::test__templater_jinja_slice_template[foo",
+    "test/core/templaters/jinja_test.py::test__templater_jinja_slice_template[SELECT",
+    "test/core/templaters/jinja_test.py::test__templater_jinja_slice_template[{%",
+    "test/core/templaters/jinja_test.py::test__templater_jinja_slice_file[--result0]",
+    "test/core/templaters/jinja_test.py::test__templater_jinja_slice_file[foo-foo-result1]",
+    "test/core/templaters/jinja_test.py::test__templater_jinja_slice_file[SELECT",
+    "test/core/templaters/jinja_test.py::test__templater_jinja_slice_file[{{",
+    "test/core/templaters/jinja_test.py::test__templater_jinja_slice_file[SELECT\\n",
+    "test/core/templaters/jinja_test.py::test__templater_jinja_slice_file[{%"
+  ],
+  "pool_split": "test",
+  "source": {
+    "dataset": "princeton-nlp/SWE-bench",
+    "revision": "e48e2bd1e9fecd5bbd641e9414ac59da9f2e69f6",
+    "split": "dev"
+  }
+}
