@@ -27,10 +27,29 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-invalid-actions", type=int, default=0)
     parser.add_argument("--max-tool-failure-rate", type=float, default=0.25)
     parser.add_argument("--max-observation-chars", type=int, default=12_000)
-    parser.add_argument("--train-ratio", type=float, default=0.8)
-    parser.add_argument("--dev-ratio", type=float, default=0.1)
-    parser.add_argument("--test-ratio", type=float, default=0.1)
-    parser.add_argument("--split-seed", default="patchpilot-v1")
+    parser.add_argument(
+        "--train-ratio",
+        type=float,
+        default=0.8,
+        help="Hash-fallback train ratio when no pool_split is available",
+    )
+    parser.add_argument(
+        "--dev-ratio",
+        type=float,
+        default=0.1,
+        help="Hash-fallback dev ratio when no pool_split is available",
+    )
+    parser.add_argument(
+        "--test-ratio",
+        type=float,
+        default=0.1,
+        help="Hash-fallback test ratio when no pool_split is available",
+    )
+    parser.add_argument(
+        "--split-seed",
+        default="patchpilot-v1",
+        help="Seed for the deterministic fallback when no pool_split is available",
+    )
     return parser
 
 

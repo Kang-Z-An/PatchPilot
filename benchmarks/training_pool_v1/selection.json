@@ -27,6 +27,8 @@
     ],
     "python_source_only": true,
     "gold_patches_excluded_from_instance_files": true,
+    "agent_tests_use_public_regressions_only": true,
+    "official_target_tests_excluded_from_agent_command": true,
     "excluded_repositories": [
       "pvlib/pvlib-python",
       "pyvista/pyvista"
@@ -42,6 +44,7 @@
       ],
       "gold_changed_lines": 3,
       "target_test_count": 1,
+      "agent_test_policy": "public_regression_pass_to_pass_file",
       "ranking_hash": "b109a925e4bb40798a9f1d5c49a586b32e1bce0face289b6d1e09f6c43af3847"
     },
     {
@@ -53,6 +56,7 @@
       ],
       "gold_changed_lines": 5,
       "target_test_count": 3,
+      "agent_test_policy": "public_regression_pass_to_pass_file",
       "ranking_hash": "466dfb1bc2a8750fbb44cf0e6eeebdd7a4206d184f17f73bd340cd7d70c58375"
     },
     {
@@ -64,6 +68,7 @@
       ],
       "gold_changed_lines": 13,
       "target_test_count": 1,
+      "agent_test_policy": "public_regression_pass_to_pass_file",
       "ranking_hash": "3a3a6f8f6e7c6cd81a9c0eb078a605dfd236b3bc0cf93bad0610d161aeb102e5"
     },
     {
@@ -75,6 +80,7 @@
       ],
       "gold_changed_lines": 17,
       "target_test_count": 1,
+      "agent_test_policy": "public_regression_pass_to_pass_file",
       "ranking_hash": "239fdabf512199801a14eed0c797d1af33c5761191d64ede4e4907c3433d1caf"
     },
     {
@@ -86,6 +92,7 @@
       ],
       "gold_changed_lines": 2,
       "target_test_count": 1,
+      "agent_test_policy": "public_regression_pass_to_pass_file",
       "ranking_hash": "dab887aa3718a135bacf84650138bc971ad69e382b2df9f9ad8c135806254697"
     },
     {
@@ -97,6 +104,7 @@
       ],
       "gold_changed_lines": 6,
       "target_test_count": 1,
+      "agent_test_policy": "public_regression_pass_to_pass_file",
       "ranking_hash": "4ce9783a0f0a470bda75d6a2a73849f1f2bd1c8d079be349a2ee8f31a5ce56bb"
     },
     {
@@ -109,6 +117,7 @@
       ],
       "gold_changed_lines": 21,
       "target_test_count": 2,
+      "agent_test_policy": "public_regression_pass_to_pass_file",
       "ranking_hash": "3f27d5c500a5e8bfada8e39b0ad4e6fe6419b84fc705892e6384e2a5a6799c37"
     },
     {
@@ -120,6 +129,7 @@
       ],
       "gold_changed_lines": 5,
       "target_test_count": 1,
+      "agent_test_policy": "public_regression_pass_to_pass_file",
       "ranking_hash": "29065e4a479c4603d13f6ac9ea82b90f2e4e3c1ed99f197efd60eed52a0cdf42"
     },
     {
@@ -132,6 +142,7 @@
       ],
       "gold_changed_lines": 19,
       "target_test_count": 1,
+      "agent_test_policy": "public_regression_pass_to_pass_file",
       "ranking_hash": "a0c90d248950b25eb7cb6b29ef653f44b971242c53704d09cba448a723ab04a9"
     },
     {
@@ -143,6 +154,7 @@
       ],
       "gold_changed_lines": 4,
       "target_test_count": 1,
+      "agent_test_policy": "public_regression_pass_to_pass_file",
       "ranking_hash": "9c2d210f38ddcad641d81f5dd55d06f33f00eb8bdc879dcd99ff141d4e7299c7"
     },
     {
@@ -154,6 +166,7 @@
       ],
       "gold_changed_lines": 10,
       "target_test_count": 5,
+      "agent_test_policy": "public_regression_pass_to_pass_file",
       "ranking_hash": "17013af9cdbcc350575dd73f6de9c88ec260c51a09eaef7f4e365e44c15a445c"
     },
     {
@@ -166,6 +179,7 @@
       ],
       "gold_changed_lines": 17,
       "target_test_count": 1,
+      "agent_test_policy": "public_regression_pass_to_pass_file",
       "ranking_hash": "9ab0a4c4c886338ed2d31a0daa0934de28e1dfdb9e6db8370abfb14b11533c9d"
     },
     {
@@ -177,6 +191,7 @@
       ],
       "gold_changed_lines": 3,
       "target_test_count": 1,
+      "agent_test_policy": "public_regression_pass_to_pass_file",
       "ranking_hash": "32a87f775fae2c2e10a7d24397a9661d0d260d7d730a8dac345c4da1b2fc1ad0"
     },
     {
@@ -188,6 +203,7 @@
       ],
       "gold_changed_lines": 24,
       "target_test_count": 1,
+      "agent_test_policy": "public_regression_pass_to_pass_file",
       "ranking_hash": "16c7f7fbcf6a2dee9939cbc8df49e2af3c2a02a2abc4452a3b70a1af0d7f82bd"
     },
     {
@@ -199,6 +215,7 @@
       ],
       "gold_changed_lines": 17,
       "target_test_count": 3,
+      "agent_test_policy": "public_regression_pass_to_pass_file",
       "ranking_hash": "0e2edc929b791da01179d7debc7826e25d4989b0d3bfbca41add0e6231ebc019"
     },
     {
@@ -210,6 +227,7 @@
       ],
       "gold_changed_lines": 28,
       "target_test_count": 5,
+      "agent_test_policy": "public_regression_explicit_fallback",
       "ranking_hash": "02efecb0c600754d3f844a65a2522a6e88d74a1cf3dc8fb5f0d710978dc35db3"
     },
     {
@@ -221,6 +239,7 @@
       ],
       "gold_changed_lines": 2,
       "target_test_count": 1,
+      "agent_test_policy": "public_regression_pass_to_pass_file",
       "ranking_hash": "062c13d820aa43b01259c7d89aaff86aced7f61786e3413113e78c229c6f3fb7"
     },
     {
@@ -232,6 +251,7 @@
       ],
       "gold_changed_lines": 27,
       "target_test_count": 1,
+      "agent_test_policy": "public_regression_pass_to_pass_file",
       "ranking_hash": "0d056b3dd1df6a74a2491f299e65d47fcb9a59bbff4315e56774a291335d6ff6"
     },
     {
@@ -243,6 +263,7 @@
       ],
       "gold_changed_lines": 13,
       "target_test_count": 1,
+      "agent_test_policy": "public_regression_target_file_fallback",
       "ranking_hash": "2a955b00cff249dc3a6f66fdcb84b3520a54d7e6bb7845ab3c859d0aeb174dc4"
     },
     {
@@ -254,6 +275,7 @@
       ],
       "gold_changed_lines": 2,
       "target_test_count": 3,
+      "agent_test_policy": "public_regression_pass_to_pass_file",
       "ranking_hash": "2a55d1f13165de5300b8d16940ba8cb21d0ac6c7cbc6c78e22e4e893c71f87ad"
     },
     {
@@ -265,6 +287,7 @@
       ],
       "gold_changed_lines": 11,
       "target_test_count": 1,
+      "agent_test_policy": "public_regression_pass_to_pass_file",
       "ranking_hash": "14db98b8ba641b7961cc78659b287335876f0c70cd09713646cbe0334f9d2bf3"
     },
     {
@@ -276,6 +299,7 @@
       ],
       "gold_changed_lines": 59,
       "target_test_count": 5,
+      "agent_test_policy": "public_regression_pass_to_pass_file",
       "ranking_hash": "0d81ea71d820c1b843c23538802e01649e47b0e124e6879b36f3279d7686e267"
     },
     {
@@ -287,6 +311,7 @@
       ],
       "gold_changed_lines": 35,
       "target_test_count": 1,
+      "agent_test_policy": "public_regression_pass_to_pass_file",
       "ranking_hash": "1852734580870363dc3b87071b8d93f61c08cc0ed07bb6bc839f3dd6223daada"
     },
     {
@@ -300,6 +325,7 @@
       ],
       "gold_changed_lines": 68,
       "target_test_count": 1,
+      "agent_test_policy": "public_regression_pass_to_pass_file",
       "ranking_hash": "1304ef34c78f832582c9e64bfcc372a14b095f533e6d54a0e06768939347378e"
     }
   ]

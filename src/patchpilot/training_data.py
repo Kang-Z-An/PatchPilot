@@ -78,8 +78,11 @@ def export_sft_dataset(
     rejection_counts: Counter[str] = Counter()
     fidelity_seen: Counter[str] = Counter()
     fidelity_accepted: Counter[str] = Counter()
+    split_assignment_counts: Counter[str] = Counter()
+    split_provenance_counts: Counter[str] = Counter()
     accepted: list[dict[str, Any]] = []
     seen_samples: set[str] = set()
+    task_splits: dict[str, str] = {}
 
     for path in trajectories:
         try:
@@ -115,7 +118,20 @@ def export_sft_dataset(
             rejection_counts["duplicate_conversation"] += 1
             continue
         seen_samples.add(content_hash)
-        split = split_for_task(parsed.task_id, config)
+        try:
+            split, split_provenance = _split_for_trajectory(parsed, config)
+        except ValueError:
+            rejection_counts["invalid_split_assignment"] += 1
+            continue
+        previous_split = task_splits.setdefault(parsed.task_id, split)
+        if previous_split != split:
+            raise ValueError(
+                "Conflicting split assignments for task "
+                f"{parsed.task_id!r}: {previous_split!r} and {split!r}"
+            )
+        split_assignment = (
+            "hashed" if split_provenance == "task_id_hash" else "preassigned"
+        )
         metrics = parsed.terminal.get("metrics")
         accepted.append(
             {
@@ -132,11 +148,15 @@ def export_sft_dataset(
                     "official_status": official_status or "not_available",
                     "steps": parsed.terminal.get("step"),
                     "truncated_observations": parsed.truncated_observations,
+                    "split_assignment": split_assignment,
+                    "split_provenance": split_provenance,
                     "metrics": metrics if isinstance(metrics, dict) else {},
                 },
             }
         )
         fidelity_accepted[parsed.fidelity] += 1
+        split_assignment_counts[split_assignment] += 1
+        split_provenance_counts[split_provenance] += 1
 
     accepted.sort(key=lambda item: (item["split"], item["task_id"], item["sample_id"]))
     output_dir = output_dir.resolve()
@@ -161,8 +181,17 @@ def export_sft_dataset(
         "rejection_reasons": dict(sorted(rejection_counts.items())),
         "split_counts": split_counts,
         "split_task_ids": split_task_ids,
+        "split_assignment_counts": dict(sorted(split_assignment_counts.items())),
+        "split_provenance_counts": dict(sorted(split_provenance_counts.items())),
         "split_policy": {
             "unit": "task_id",
+            "mode": "prefer_preassigned",
+            "preassigned_sources": [
+                "trajectory",
+                "manifest_snapshot",
+                "instance_file",
+            ],
+            "fallback": "deterministic_task_id_hash",
             "seed": config.split_seed,
             "ratios": {
                 "train": config.train_ratio,
@@ -260,6 +289,88 @@ def split_for_task(task_id: str, config: ExportConfig) -> str:
     if value < config.train_ratio + config.dev_ratio:
         return "dev"
     return "test"
+
+
+def _split_for_trajectory(
+    parsed: ParsedTrajectory,
+    config: ExportConfig,
+) -> tuple[str, str]:
+    trajectory_split = parsed.start.get("pool_split")
+    if trajectory_split is not None:
+        return _validate_pool_split(trajectory_split, "trajectory"), "trajectory"
+
+    snapshot_path = _nearest_file(parsed.path, "manifest.snapshot.jsonl")
+    if snapshot_path is not None:
+        record = _snapshot_record(snapshot_path, parsed.task_id)
+        if record is not None:
+            snapshot_split = record.get("pool_split")
+            if snapshot_split is not None:
+                return (
+                    _validate_pool_split(snapshot_split, str(snapshot_path)),
+                    "manifest_snapshot",
+                )
+            instance_split = _split_from_instance_file(record, snapshot_path)
+            if instance_split is not None:
+                return instance_split, "instance_file"
+
+    return split_for_task(parsed.task_id, config), "task_id_hash"
+
+
+def _snapshot_record(path: Path, task_id: str) -> dict[str, Any] | None:
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for line_number, line in enumerate(lines, 1):
+        if not line.strip():
+            continue
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"Invalid manifest snapshot JSON at {path}:{line_number}: {exc.msg}"
+            ) from exc
+        if not isinstance(value, dict):
+            raise ValueError(
+                f"Manifest snapshot record must be an object at {path}:{line_number}"
+            )
+        if value.get("instance_id") == task_id:
+            return value
+    return None
+
+
+def _split_from_instance_file(
+    snapshot_record: dict[str, Any],
+    snapshot_path: Path,
+) -> str | None:
+    raw_path = snapshot_record.get("instance_file")
+    if not isinstance(raw_path, str) or not raw_path.strip():
+        return None
+    instance_path = Path(raw_path).expanduser()
+    if not instance_path.is_absolute():
+        instance_path = snapshot_path.parent / instance_path
+    try:
+        value = json.loads(instance_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    records = value if isinstance(value, list) else [value]
+    task_id = snapshot_record.get("instance_id")
+    for record in records:
+        if not isinstance(record, dict) or record.get("instance_id") != task_id:
+            continue
+        split = record.get("pool_split")
+        if split is None:
+            return None
+        return _validate_pool_split(split, str(instance_path))
+    return None
+
+
+def _validate_pool_split(value: Any, source: str) -> str:
+    if not isinstance(value, str) or value not in _SPLITS:
+        raise ValueError(
+            f"pool_split must be one of {list(_SPLITS)} in {source}, got {value!r}"
+        )
+    return value
 
 
 def _quality_rejection(

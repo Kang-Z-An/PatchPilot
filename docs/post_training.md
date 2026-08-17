@@ -11,7 +11,7 @@ same frozen evaluator is used before and after training.
 Agent run
   -> schema-v2 trajectory
   -> verification and safety filters
-  -> task-level deterministic split
+  -> frozen pool split (or deterministic task hash fallback)
   -> train/dev/test chat JSONL
   -> SFT/LoRA
   -> frozen local + SWE-bench evaluation
@@ -50,8 +50,12 @@ A strict SFT sample must satisfy all available evidence:
 6. No recognizable API key or authorization secret appears in the conversation.
 7. An identical conversation has not already been exported.
 
-Samples are assigned by a seeded hash of `task_id`. Adding another attempt for
-an existing task cannot put that task into a different split.
+For frozen benchmark pools, samples preserve the task's preassigned
+`pool_split` from the batch snapshot. Older snapshots are recovered through
+their recorded instance file. Ad-hoc runs without either source use a seeded
+hash of `task_id` as a deterministic fallback. The exporter records this
+provenance in each sample and report, and aborts if the same task is assigned to
+different splits.
 
 ## Current local corpus audit
 
@@ -119,3 +123,10 @@ the evidence is frozen in `benchmarks/training_pool_v1/smoke_report.json`.
    preference optimization or reward-guided methods. Do not manufacture GRPO
    rewards before the evaluator can reliably distinguish correct patches from
    environment failures.
+
+For SWE-bench rollouts, Agent-side tests are deliberately different from the
+official target tests. The Agent runs relevant public regression files already
+present at `base_commit`; it never receives `test_patch` or names tests
+introduced by that patch. A strict training sample therefore needs both fresh
+public regression success inside the trajectory and `resolved=true` from the
+separate official evaluator.

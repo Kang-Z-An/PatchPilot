@@ -254,7 +254,11 @@ class SWEBenchBatchTest(unittest.TestCase):
             first = self._write_instance(root, "example__repo-1", commit)
             second = self._write_instance(root, "example__repo-2", commit)
             records = [
-                self._record(first, source, "example__repo-1"),
+                {
+                    **self._record(first, source, "example__repo-1"),
+                    "test_policy": "public_regression_pass_to_pass_file",
+                    "pool_split": "train",
+                },
                 {
                     **self._record(second, source, "example__repo-2"),
                     "protect_test_files": False,
@@ -271,6 +275,27 @@ class SWEBenchBatchTest(unittest.TestCase):
         self.assertTrue(cases[0].protect_test_files)
         self.assertFalse(cases[1].protect_test_files)
         self.assertTrue(cases[0].snapshot()["protect_test_files"])
+        self.assertEqual(cases[0].test_policy, "public_regression_pass_to_pass_file")
+        self.assertEqual(
+            cases[0].snapshot()["test_policy"], "public_regression_pass_to_pass_file"
+        )
+        self.assertEqual(cases[0].pool_split, "train")
+        self.assertEqual(cases[0].snapshot()["pool_split"], "train")
+
+    def test_manifest_rejects_invalid_pool_split(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, commit = self._make_repository(root / "source")
+            instance = self._write_instance(root, "example__repo-1", commit)
+            record = {
+                **self._record(instance, source, "example__repo-1"),
+                "pool_split": "validation",
+            }
+            manifest = root / "manifest.jsonl"
+            manifest.write_text(json.dumps(record) + "\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "pool_split must be one of"):
+                load_batch_manifest(manifest)
 
     def _make_manifest(self, root: Path, count: int = 1):
         source, commit = self._make_repository(root / "source")

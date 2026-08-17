@@ -144,11 +144,13 @@ incompletely verified runs, known official failures, test-modifying patches,
 high tool-failure/invalid-action runs, and conversations containing recognizable
 secret patterns. Absolute repository paths are replaced with `<REPOSITORY>`.
 
-All attempts for the same `task_id` are assigned to the same deterministic
-split, preventing repeated runs of one benchmark issue from leaking across
-train/dev/test. Old schema-v1 traces can be audited with `--allow-legacy`, but
-they are labeled `legacy_approximate` and should not be mixed silently with
-exact training examples.
+Frozen benchmark tasks retain their preassigned `pool_split`; older batch runs
+recover it from the instance recorded in their manifest snapshot. Ad-hoc runs
+fall back to a deterministic `task_id` hash. Conflicting assignments for the
+same task stop the export, preventing repeated runs of one issue from leaking
+across train/dev/test. Old schema-v1 traces can be audited with
+`--allow-legacy`, but they are labeled `legacy_approximate` and should not be
+mixed silently with exact training examples.
 
 See [`docs/post_training.md`](docs/post_training.md) for the data contract,
 current corpus audit, frozen 24-task training pool, and the SFT/LoRA evaluation

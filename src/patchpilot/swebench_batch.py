@@ -17,6 +17,7 @@ from .types import Model
 
 
 _RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+_POOL_SPLITS = {"train", "dev", "test"}
 _COUNT_METRICS = (
     "tool_calls",
     "tool_failures",
@@ -41,6 +42,8 @@ class SWEBenchBatchCase:
     instance_id: str
     instance_file: Path
     test_command: str
+    test_policy: str | None = None
+    pool_split: str | None = None
     docker_image: str | None = None
     source_repo: Path | None = None
     max_steps: int = 25
@@ -89,6 +92,18 @@ class SWEBenchBatchCase:
             not isinstance(source_repo_value, str) or not source_repo_value.strip()
         ):
             raise ValueError(f"source_repo must be a non-empty string in {location}")
+        test_policy = data.get("test_policy")
+        if test_policy is not None and (
+            not isinstance(test_policy, str) or not test_policy.strip()
+        ):
+            raise ValueError(f"test_policy must be a non-empty string in {location}")
+        pool_split = data.get("pool_split")
+        if pool_split is not None and (
+            not isinstance(pool_split, str) or pool_split not in _POOL_SPLITS
+        ):
+            raise ValueError(
+                f"pool_split must be one of {sorted(_POOL_SPLITS)} in {location}"
+            )
 
         base = manifest_path.parent
         instance_file = _resolve_manifest_path(base, data["instance_file"])
@@ -107,6 +122,8 @@ class SWEBenchBatchCase:
             instance_id=instance_id,
             instance_file=instance_file,
             test_command=data["test_command"].strip(),
+            test_policy=test_policy.strip() if test_policy is not None else None,
+            pool_split=pool_split,
             docker_image=docker_image.strip() if docker_image is not None else None,
             source_repo=source_repo,
             max_steps=max_steps,
@@ -121,6 +138,8 @@ class SWEBenchBatchCase:
             "instance_id": self.instance_id,
             "instance_file": str(self.instance_file),
             "test_command": self.test_command,
+            "test_policy": self.test_policy,
+            "pool_split": self.pool_split,
             "docker_image": self.docker_image,
             "source_repo": str(self.source_repo) if self.source_repo is not None else None,
             "max_steps": self.max_steps,

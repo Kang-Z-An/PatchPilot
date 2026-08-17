@@ -3,8 +3,9 @@
 This directory freezes the first post-training task pool. It is selected from
 the official `princeton-nlp/SWE-bench` **dev** split at revision
 `e48e2bd1e9fecd5bbd641e9414ac59da9f2e69f6`. The 19,008-record train split was
-not used because it does not provide `FAIL_TO_PASS` test identifiers required by
-PatchPilot's verified rollout pipeline.
+not used because it does not provide the `FAIL_TO_PASS` and `PASS_TO_PASS`
+evidence needed to separate official target grading from non-leaking
+Agent-side regression checks.
 
 ## Composition
 
@@ -22,6 +23,14 @@ selection is ranked deterministically using the seed in `selection.json`.
 The instance files deliberately omit `patch` and `test_patch`. Gold patch file
 names and aggregate size are retained only in `selection.json` for dataset
 auditing; the Agent receives only the issue and repository checkout.
+
+Agent-side `run_tests` commands never name `FAIL_TO_PASS` nodes because those
+tests may be introduced only by the withheld `test_patch`. Manifests instead
+select a relevant test file backed by `PASS_TO_PASS` evidence and let pytest
+collect only the tests actually present at `base_commit`. When the dataset has
+no such evidence, an explicit file-level public fallback is recorded in
+`test_policy`. The official evaluator alone applies `test_patch` and determines
+whether the target tests resolve.
 
 ## Isolation rules
 

@@ -96,6 +96,116 @@ class TrainingDataExportTest(unittest.TestCase):
             self.assertEqual(report["rejection_reasons"]["test_files_modified"], 1)
             self.assertEqual(report["rejection_reasons"]["possible_secret"], 1)
 
+    def test_preserves_split_from_manifest_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = root / "batch-run"
+            trace = run / "artifacts" / "task-preassigned" / "trajectory" / "trace.jsonl"
+            self._write_exact(trace, "task-preassigned", "preassigned")
+            (run / "manifest.snapshot.jsonl").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "instance_id": "task-preassigned",
+                        "instance_file": "unused.json",
+                        "test_command": "python -m pytest -q",
+                        "pool_split": "train",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            report = export_sft_dataset([run], root / "dataset")
+
+            records = self._records(root / "dataset")
+            self.assertEqual(report["split_counts"], {"train": 1, "dev": 0, "test": 0})
+            self.assertEqual(report["split_assignment_counts"], {"preassigned": 1})
+            self.assertEqual(report["split_provenance_counts"], {"manifest_snapshot": 1})
+            self.assertEqual(records[0]["split"], "train")
+            self.assertEqual(records[0]["metadata"]["split_assignment"], "preassigned")
+            self.assertEqual(
+                records[0]["metadata"]["split_provenance"], "manifest_snapshot"
+            )
+
+    def test_recovers_split_from_instance_for_legacy_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = root / "batch-run"
+            trace = run / "artifacts" / "task-legacy" / "trajectory" / "trace.jsonl"
+            self._write_exact(trace, "task-legacy", "legacy snapshot")
+            instance = root / "task-legacy.json"
+            instance.write_text(
+                json.dumps(
+                    {
+                        "instance_id": "task-legacy",
+                        "repo": "example/repo",
+                        "base_commit": "abc123",
+                        "problem_statement": "fix it",
+                        "pool_split": "dev",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (run / "manifest.snapshot.jsonl").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "instance_id": "task-legacy",
+                        "instance_file": str(instance),
+                        "test_command": "python -m pytest -q",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            report = export_sft_dataset([run], root / "dataset")
+
+            records = self._records(root / "dataset")
+            self.assertEqual(records[0]["split"], "dev")
+            self.assertEqual(records[0]["metadata"]["split_provenance"], "instance_file")
+            self.assertEqual(report["split_assignment_counts"], {"preassigned": 1})
+
+    def test_hash_fallback_remains_deterministic(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write_exact(root / "trace.jsonl", "task-hash", "hash fallback")
+
+            first = export_sft_dataset([root], root / "first")
+            second = export_sft_dataset([root / "trace.jsonl"], root / "second")
+
+            first_record = self._records(root / "first")[0]
+            second_record = self._records(root / "second")[0]
+            self.assertEqual(first_record["split"], second_record["split"])
+            self.assertEqual(first_record["metadata"]["split_provenance"], "task_id_hash")
+            self.assertEqual(first["split_assignment_counts"], {"hashed": 1})
+            self.assertEqual(second["split_assignment_counts"], {"hashed": 1})
+
+    def test_rejects_conflicting_splits_for_the_same_task(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name, split in (("first", "train"), ("second", "test")):
+                run = root / name
+                trace = run / "artifacts" / "shared-task" / "trajectory" / "trace.jsonl"
+                self._write_exact(trace, "shared-task", name)
+                (run / "manifest.snapshot.jsonl").write_text(
+                    json.dumps(
+                        {
+                            "schema_version": 1,
+                            "instance_id": "shared-task",
+                            "instance_file": "unused.json",
+                            "test_command": "python -m pytest -q",
+                            "pool_split": split,
+                        }
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+
+            with self.assertRaisesRegex(ValueError, "Conflicting split assignments"):
+                export_sft_dataset([root], root / "dataset")
+
     @staticmethod
     def _write_exact(
         path: Path,

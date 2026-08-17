@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,6 +9,7 @@ from pathlib import Path
 from patchpilot.training_pool import (
     QUALIFIED_IMAGE_TAGS,
     TrainingPoolConfig,
+    build_agent_test_command,
     discover_reserved_instance_ids,
     select_training_pool,
     write_training_pool,
@@ -15,6 +17,21 @@ from patchpilot.training_pool import (
 
 
 class TrainingPoolTest(unittest.TestCase):
+    def test_public_test_command_uses_the_existing_test_file(self) -> None:
+        command, policy = build_agent_test_command(
+            instance_id="example__repo-1",
+            fail_to_pass=["tests/test_bug.py::test_value[new]"],
+            pass_to_pass=[
+                'tests/test_bug.py::test_value["quoted]',
+                "tests/test_bug.py::test_value[safe]",
+            ],
+        )
+
+        self.assertNotIn("quoted", command)
+        self.assertNotIn("safe", command)
+        self.assertIn("tests/test_bug.py", shlex.split(command))
+        self.assertEqual(policy, "public_regression_pass_to_pass_file")
+
     def test_balanced_deterministic_selection_and_split_isolation(self) -> None:
         records = [
             self._record(repo, index)
@@ -123,9 +140,52 @@ class TrainingPoolTest(unittest.TestCase):
             self.assertTrue(
                 all(item["test_command"].startswith("python -m pytest -q ") for item in manifest)
             )
+            for item in manifest:
+                written_instance = json.loads(
+                    (output / item["instance_file"]).read_text(encoding="utf-8")
+                )
+                command = shlex.split(item["test_command"])
+                self.assertNotIn(written_instance["FAIL_TO_PASS"][0], command)
+                self.assertIn("tests/test_feature.py", command)
+                self.assertEqual(
+                    item["test_policy"], "public_regression_pass_to_pass_file"
+                )
             selection_text = paths["selection"].read_text(encoding="utf-8")
             self.assertNotIn("gold answer", selection_text)
             self.assertIn('"instance_ids": 500', selection_text)
+
+    def test_uses_explicit_public_file_fallback_without_pass_to_pass(self) -> None:
+        records = [self._record("pydicom/pydicom", index) for index in range(6)]
+        records[0]["instance_id"] = "pydicom__pydicom-901"
+        records[0]["PASS_TO_PASS"] = "[]"
+        config = TrainingPoolConfig()
+        selected, report = select_training_pool(records, set(), config)
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_training_pool(
+                selected,
+                report,
+                Path(directory) / "pool",
+                dataset_name="example/dataset",
+                dataset_revision="abc123",
+                source_split="dev",
+                config=config,
+            )
+            manifests = [
+                json.loads(line)
+                for split in ("train", "dev", "test")
+                for line in paths[f"manifest_{split}"].read_text(encoding="utf-8").splitlines()
+            ]
+
+        record = next(
+            item for item in manifests if item["instance_id"] == "pydicom__pydicom-901"
+        )
+        self.assertEqual(
+            record["test_command"],
+            "python -m pytest -q pydicom/tests/test_uid.py",
+        )
+        self.assertEqual(
+            record["test_policy"], "public_regression_explicit_fallback"
+        )
 
     def test_writes_qualified_image_tag_for_adapted_instance(self) -> None:
         instance_id = "pylint-dev__astroid-1959"

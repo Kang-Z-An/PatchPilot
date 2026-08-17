@@ -20,6 +20,15 @@ QUALIFIED_IMAGE_TAGS = {
     "sqlfluff__sqlfluff-4041": "localcache",
 }
 
+# SWE-bench instance images contain the repository at base_commit. Tests from
+# test_patch are applied only by the official evaluator, so Agent-side commands
+# must use tests that already exist in that base checkout. An explicit fallback
+# is needed when the dataset has no PASS_TO_PASS tests and the FAIL_TO_PASS file
+# itself was introduced by test_patch.
+PUBLIC_TEST_FILE_FALLBACKS = {
+    "pydicom__pydicom-901": ("pydicom/tests/test_uid.py",),
+}
+
 
 @dataclass(frozen=True)
 class TrainingPoolConfig:
@@ -163,8 +172,10 @@ def write_training_pool(
             },
         }
         _write_json(instance_path, instance)
-        test_command = "python -m pytest -q " + " ".join(
-            shlex.quote(test_id) for test_id in item["fail_to_pass"]
+        test_command, test_policy = build_agent_test_command(
+            instance_id=instance_id,
+            fail_to_pass=item["fail_to_pass"],
+            pass_to_pass=item["pass_to_pass"],
         )
         manifest_records.append(
             {
@@ -176,6 +187,7 @@ def write_training_pool(
                     f"{QUALIFIED_IMAGE_TAGS.get(instance_id, 'latest')}"
                 ),
                 "test_command": test_command,
+                "test_policy": test_policy,
                 "max_steps": 30,
                 "timeout": 300,
                 "enabled": True,
@@ -191,6 +203,7 @@ def write_training_pool(
                 "gold_patch_files": item["patch_files"],
                 "gold_changed_lines": item["changed_lines"],
                 "target_test_count": len(item["fail_to_pass"]),
+                "agent_test_policy": test_policy,
                 "ranking_hash": _stable_rank(config.seed, instance_id),
             }
         )
@@ -245,6 +258,8 @@ def write_training_pool(
                 "problem_chars": [config.min_problem_chars, config.max_problem_chars],
                 "python_source_only": True,
                 "gold_patches_excluded_from_instance_files": True,
+                "agent_tests_use_public_regressions_only": True,
+                "official_target_tests_excluded_from_agent_command": True,
                 "excluded_repositories": list(config.excluded_repositories),
             },
             "instances": selection_records,
@@ -349,6 +364,68 @@ def _parse_string_list(value: Any) -> list[str]:
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         return []
     return value
+
+
+def build_agent_test_command(
+    *,
+    instance_id: str,
+    fail_to_pass: list[str],
+    pass_to_pass: list[str],
+    max_files: int = 1,
+) -> tuple[str, str]:
+    """Build a non-leaking Agent-side regression command.
+
+    FAIL_TO_PASS tests can be introduced by the withheld SWE-bench test_patch
+    and therefore cannot be assumed to exist in the Agent's base checkout.
+    Prefer a nearby file supported by PASS_TO_PASS evidence and let pytest
+    collect only the tests present at base_commit. If no such evidence exists,
+    use an explicit file fallback without naming a hidden test node. The
+    official evaluator remains responsible for target grading.
+    """
+
+    if max_files < 1:
+        raise ValueError("max_files must be positive")
+    public_files = _select_public_regression_files(fail_to_pass, pass_to_pass)
+    if public_files:
+        return (
+            "python -m pytest -q "
+            + " ".join(shlex.quote(path) for path in public_files[:max_files]),
+            "public_regression_pass_to_pass_file",
+        )
+
+    fallback_files = PUBLIC_TEST_FILE_FALLBACKS.get(instance_id)
+    policy = "public_regression_explicit_fallback"
+    if fallback_files is None:
+        fallback_files = tuple(_unique_test_files(fail_to_pass))
+        policy = "public_regression_target_file_fallback"
+    if not fallback_files:
+        raise ValueError(f"No public Agent-side tests available for {instance_id}")
+    return (
+        "python -m pytest -q "
+        + " ".join(shlex.quote(path) for path in fallback_files),
+        policy,
+    )
+
+
+def _select_public_regression_files(
+    fail_to_pass: list[str],
+    pass_to_pass: list[str],
+) -> list[str]:
+    target_files = _unique_test_files(fail_to_pass)
+    pass_files = _unique_test_files(pass_to_pass)
+    # A target file named by PASS_TO_PASS existed before test_patch. Running the
+    # file lets pytest collect only the public tests actually present at
+    # base_commit, avoiding non-reversible or newly introduced node ids.
+    matching = [path for path in target_files if path in set(pass_files)]
+    return matching + [path for path in pass_files if path not in matching]
+
+
+def _test_file(test_id: str) -> str:
+    return test_id.split("::", 1)[0]
+
+
+def _unique_test_files(test_ids: list[str]) -> list[str]:
+    return list(dict.fromkeys(_test_file(test_id) for test_id in test_ids))
 
 
 def _patch_files(patch: str) -> list[str]:
