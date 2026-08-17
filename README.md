@@ -23,6 +23,7 @@ boundaries, prompts, and traces are all visible in this repository.
 - Deterministic fake model for offline end-to-end tests
 - Schema-v2 JSONL trajectories that preserve the exact model conversation
 - Audited SFT chat-data export with quality filters and task-level data splits
+- Train-only preference export pairing official unresolved and resolved trajectories
 
 ## Quick start
 
@@ -151,6 +152,23 @@ same task stop the export, preventing repeated runs of one issue from leaking
 across train/dev/test. Old schema-v1 traces can be audited with
 `--allow-legacy`, but they are labeled `legacy_approximate` and should not be
 mixed silently with exact training examples.
+
+After a failed train trajectory has been corrected and officially resolved,
+export a conversation-level preference pair:
+
+```bash
+uv run python -m patchpilot.export_preference_data \
+  --rejected-input .patchpilot/swebench/batch/<baseline-run> \
+  --chosen-input .patchpilot/swebench/batch/<correction-run> \
+  --output-dir .patchpilot/training/preferences-v1
+```
+
+This exporter is deliberately stricter than the SFT exporter. Both trajectories
+must be exact schema-v2 SWE-bench runs from an explicitly preassigned train
+task, pass Agent-side verification, leave tests untouched, and have identical
+initial prompts. The rejected side must be officially unresolved and the chosen
+side officially resolved. A gold diff alone is never accepted as a chosen
+trajectory.
 
 See [`docs/post_training.md`](docs/post_training.md) for the data contract,
 current corpus audit, frozen 24-task training pool, and the SFT/LoRA evaluation

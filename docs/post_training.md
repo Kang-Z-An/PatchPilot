@@ -15,6 +15,11 @@ Agent run
   -> train/dev/test chat JSONL
   -> SFT/LoRA
   -> frozen local + SWE-bench evaluation
+
+Official unresolved train rollout + officially resolved corrected rollout
+  -> exact prompt and task match
+  -> chosen/rejected conversation pair
+  -> preference optimization (only after the SFT baseline)
 ```
 
 ## Trajectory contract
@@ -57,9 +62,9 @@ hash of `task_id` as a deterministic fallback. The exporter records this
 provenance in each sample and report, and aborts if the same task is assigned to
 different splits.
 
-## Current local corpus audit
+## Corpus audits
 
-The first audit scanned 24 historical trajectories:
+The first audit scanned 24 historical pre-schema-v2 trajectories:
 
 - strict exact mode: **0 accepted** because all completed historical runs
   predate schema v2;
@@ -70,7 +75,14 @@ The first audit scanned 24 historical trajectories:
 The five legacy candidates are evidence that the converter works, not a useful
 training corpus. Four landed in train and one in test under the current stable
 hash; dev is empty because the corpus is tiny. No SFT result should be claimed
-from this dataset.
+from this historical dataset.
+
+The later training-pool v1 rollout produced 16 exact train trajectories. The
+official harness resolved seven and left nine unresolved, so strict SFT export
+accepts seven and rejects nine. The baseline and failure analysis are frozen in
+`experiments/training_pool_v1_deepseek/`. The nine unresolved task IDs form
+`manifest_train_corrections.jsonl`; they remain rejected examples until a
+same-prompt corrected rollout is officially resolved.
 
 Reproduce the two audits:
 
@@ -89,6 +101,33 @@ uv run python -m patchpilot.export_training_data \
 
 Generated datasets remain under Git-ignored `.patchpilot/`; only aggregate,
 non-sensitive experiment reports should be versioned.
+
+## Preference-pair contract
+
+Preference export is limited to tasks explicitly assigned to the frozen train
+partition. Hash-assigned ad-hoc tasks, dev tasks, and test tasks are rejected.
+For each task, the exporter requires exactly one original trajectory with
+`official_status=unresolved` and one corrected trajectory with
+`official_status=resolved`. Both sides must pass the same schema-v2 quality,
+verification, source-only, and secret checks used for strict SFT data.
+
+The initial system and user messages must match exactly after repository-path
+redaction. The output keeps this shared `prompt` once, followed by the complete
+chosen and rejected continuations, including tool calls and tool observations.
+This prevents a changed prompt from being misrepresented as a preference over
+two answers to the same input.
+
+Gold patches may guide analysis on the train split, but a gold diff is not a
+chosen trajectory. A chosen example must be a coherent Agent rollout and must
+pass the separate official harness. Generate corrections only from
+`manifest_train_corrections.jsonl`, grade that run, and then export pairs:
+
+```bash
+uv run python -m patchpilot.export_preference_data \
+  --rejected-input .patchpilot/swebench/batch/<baseline-run> \
+  --chosen-input .patchpilot/swebench/batch/<officially-graded-correction-run> \
+  --output-dir .patchpilot/training/preferences-v1
+```
 
 ## Next training sequence
 

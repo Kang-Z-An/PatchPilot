@@ -38,6 +38,8 @@ Use the manifests for their named purpose:
 
 - `manifest_train.jsonl`: collect schema-v2 trajectories for training-data
   filtering;
+- `manifest_train_corrections.jsonl`: rerun only the nine officially unresolved
+  train tasks when collecting corrected trajectories for preference pairs;
 - `manifest_dev.jsonl`: choose checkpoints and training settings, never feed
   its model outputs into training;
 - `manifest_test.jsonl`: run only for frozen pre/post-training comparison.

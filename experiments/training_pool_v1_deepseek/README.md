@@ -27,6 +27,8 @@ Machine-readable aggregate metrics are in [`summary.json`](summary.json),
 per-instance metrics and labels are in [`cases.json`](cases.json), and the
 gold-patch-informed error analysis is in
 [`failure_analysis.md`](failure_analysis.md).
+The pre-correction preference-export dry run is recorded in
+[`preference_pipeline_audit.json`](preference_pipeline_audit.json).
 
 ## Interpretation
 
@@ -113,3 +115,9 @@ This is a training-pool baseline, not a SWE-bench leaderboard submission and
 not a held-out post-training result. No API key, absolute local path, raw model
 response, full trajectory, gold patch, or third-party checkout is committed in
 this experiment record.
+
+The nine unresolved train tasks are listed in
+`benchmarks/training_pool_v1/manifest_train_corrections.jsonl`. A future
+correction run must be officially graded before
+`patchpilot.export_preference_data` can pair its resolved trajectories with the
+original unresolved ones.

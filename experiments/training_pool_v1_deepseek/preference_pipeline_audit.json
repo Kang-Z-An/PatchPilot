@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-08-17",
+  "purpose": "Dry-run the strict preference exporter before collecting correction trajectories",
+  "input_runs": [
+    "v050-train-smoke-public-tests-r1",
+    "v051-train-half1-public-tests-r1",
+    "v051-train-remaining4-public-tests-r1"
+  ],
+  "input_role_note": "The same historical runs were scanned for both roles so official status filtering and accidental cross-task pairing could be audited.",
+  "rejected_trajectories_found": 16,
+  "chosen_trajectories_found": 16,
+  "eligible_rejected_trajectories": 9,
+  "eligible_chosen_trajectories": 7,
+  "preference_pairs": 0,
+  "expected_pairs": 0,
+  "unpaired_rejected_task_ids": [
+    "pydicom__pydicom-800",
+    "pydicom__pydicom-816",
+    "pydicom__pydicom-901",
+    "pylint-dev__astroid-1978",
+    "pylint-dev__astroid-2307",
+    "pylint-dev__astroid-927",
+    "sqlfluff__sqlfluff-1517",
+    "sqlfluff__sqlfluff-2625",
+    "sqlfluff__sqlfluff-4041"
+  ],
+  "candidate_rejection_reasons": {
+    "rejected": {
+      "official_status_resolved": 7
+    },
+    "chosen": {
+      "official_status_unresolved": 9
+    }
+  },
+  "pair_rejection_reasons": {},
+  "interpretation": "The exporter correctly kept the nine official failures only on the rejected side, kept the seven official successes only on the chosen-candidate side, and formed no cross-task pairs. Corrected same-task official successes have not yet been collected."
+}
