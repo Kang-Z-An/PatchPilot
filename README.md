@@ -337,3 +337,9 @@ SWE-bench result of 7/8 resolved (87.5%). Its one unresolved instance is kept in
 the official count and accompanied by a separate gold-patch environment audit.
 The same evidence can now be regenerated from the ignored run artifacts with
 `patchpilot.analyze_swebench_run`.
+
+The complete 16-task local training partition is frozen separately in
+[`experiments/training_pool_v1_deepseek/`](experiments/training_pool_v1_deepseek/README.md).
+It records an official result of 7/16 resolved (43.75%), the seven strict SFT
+trajectory candidates, and a gold-informed diagnosis of all nine unresolved
+predictions. This training-pool result is not a held-out benchmark score.

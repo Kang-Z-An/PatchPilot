@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "experiment_id": "training-pool-v1-train-baseline-deepseek",
+  "recorded_at": "2026-08-17",
+  "recorded_with": {
+    "tag": "v0.5.2",
+    "commit": "9d4bc4638f6544e164f8b2a91b66e41bff5ffa51"
+  },
+  "model": "deepseek-v4-flash",
+  "benchmark": {
+    "dataset": "princeton-nlp/SWE-bench",
+    "dataset_revision": "e48e2bd1e9fecd5bbd641e9414ac59da9f2e69f6",
+    "source_split": "dev",
+    "pool_split": "train",
+    "manifest": "benchmarks/training_pool_v1/manifest_train.jsonl",
+    "selection": "benchmarks/training_pool_v1/selection.json",
+    "total": 16,
+    "repositories": 4,
+    "docker_platform": "linux/amd64",
+    "max_steps_per_instance": 30,
+    "tool_timeout_seconds": 300,
+    "official_max_workers": 1
+  },
+  "runs": [
+    {
+      "run_id": "v050-train-smoke-public-tests-r1",
+      "created_at": "2026-08-16T12:47:29.664209+00:00",
+      "instances": 4,
+      "code_label_from_run_id": "v0.5.0"
+    },
+    {
+      "run_id": "v051-train-half1-public-tests-r1",
+      "created_at": "2026-08-17T11:07:51.972882+00:00",
+      "instances": 8,
+      "code_label_from_run_id": "v0.5.1"
+    },
+    {
+      "run_id": "v051-train-remaining4-public-tests-r1",
+      "created_at": "2026-08-17T12:11:23.028397+00:00",
+      "instances": 4,
+      "code_label_from_run_id": "v0.5.1"
+    }
+  ],
+  "generation": {
+    "completed": 16,
+    "errors": 0,
+    "patches_generated": 16,
+    "agent_verified": 16,
+    "average_steps": 17.6875,
+    "average_duration_seconds": 164.759,
+    "average_first_edit_step": 10.063
+  },
+  "metrics": {
+    "tool_calls": 267,
+    "tool_failures": 23,
+    "tool_failure_rate": 0.0861,
+    "invalid_actions": 0,
+    "edit_attempts": 31,
+    "edit_successes": 31,
+    "edit_success_rate": 1.0,
+    "test_files_modified": 0,
+    "runs_tested_after_latest_edit": 16,
+    "test_freshness_rate": 1.0
+  },
+  "official": {
+    "status": "completed",
+    "resolved": 7,
+    "unresolved": 9,
+    "errors": 0,
+    "resolve_rate": 0.4375,
+    "instances_with_target_test_failures": 9,
+    "instances_with_regression_test_failures": 0,
+    "environment_suspect_instances": []
+  },
+  "by_repository": {
+    "marshmallow-code/marshmallow": {
+      "resolved": 4,
+      "total": 4
+    },
+    "pydicom/pydicom": {
+      "resolved": 1,
+      "total": 4
+    },
+    "pylint-dev/astroid": {
+      "resolved": 1,
+      "total": 4
+    },
+    "sqlfluff/sqlfluff": {
+      "resolved": 1,
+      "total": 4
+    }
+  },
+  "status_comparison": {
+    "resolved": {
+      "count": 7,
+      "average_steps": 14.714,
+      "average_duration_seconds": 100.301,
+      "average_first_edit_step": 9.571,
+      "average_tool_calls": 13.714,
+      "average_tool_failures": 1.0,
+      "average_edit_attempts": 1.857
+    },
+    "unresolved": {
+      "count": 9,
+      "average_steps": 20.0,
+      "average_duration_seconds": 214.892,
+      "average_first_edit_step": 10.444,
+      "average_tool_calls": 19.0,
+      "average_tool_failures": 1.778,
+      "average_edit_attempts": 2.0
+    }
+  },
+  "strict_training_export": {
+    "trajectories_found": 16,
+    "accepted_samples": 7,
+    "rejected_samples": 9,
+    "rejection_reasons": {
+      "official_unresolved": 9
+    },
+    "accepted_split": "train",
+    "dev_samples": 0,
+    "test_samples": 0
+  },
+  "failure_taxonomy": {
+    "wrong_abstraction_layer": {
+      "count": 4,
+      "instance_ids": [
+        "pylint-dev__astroid-2307",
+        "pylint-dev__astroid-927",
+        "sqlfluff__sqlfluff-1517",
+        "sqlfluff__sqlfluff-4041"
+      ]
+    },
+    "incomplete_behavioral_coverage": {
+      "count": 4,
+      "instance_ids": [
+        "pydicom__pydicom-816",
+        "pydicom__pydicom-901",
+        "pylint-dev__astroid-1978",
+        "sqlfluff__sqlfluff-2625"
+      ]
+    },
+    "incorrect_spec_algorithm": {
+      "count": 1,
+      "instance_ids": [
+        "pydicom__pydicom-800"
+      ]
+    }
+  },
+  "provenance_limits": {
+    "run_metadata_contains_git_commit": false,
+    "model_service_revision_pinned": false,
+    "code_labels_are_inferred_from_explicit_run_ids": true,
+    "headline_score_is_official_and_unadjusted": true
+  }
+}
