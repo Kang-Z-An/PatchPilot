@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import io
 import json
 import subprocess
 import tempfile
 import unittest
+from contextlib import redirect_stderr
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
+from patchpilot.evaluate_swebench_batch import main as batch_main
 from patchpilot.swebench_batch import (
     SWEBenchBatchRunner,
     build_batch_summary,
@@ -54,6 +58,31 @@ class NeverCalledModel:
 
 
 class SWEBenchBatchTest(unittest.TestCase):
+    def test_cli_fails_before_model_loading_when_official_harness_is_missing(
+        self,
+    ) -> None:
+        stderr = io.StringIO()
+        with (
+            patch(
+                "patchpilot.evaluate_swebench_batch.load_batch_manifest",
+                return_value=[],
+            ),
+            patch(
+                "patchpilot.evaluate_swebench_batch.official_harness_available",
+                return_value=False,
+            ),
+            patch(
+                "patchpilot.evaluate_swebench_batch.load_model_config"
+            ) as load_model_config,
+            redirect_stderr(stderr),
+            self.assertRaises(SystemExit) as raised,
+        ):
+            batch_main(["--manifest", "unused.jsonl", "--stage", "all"])
+
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("uv run --with swebench", stderr.getvalue())
+        load_model_config.assert_not_called()
+
     def test_manifest_rejects_duplicate_ids_and_skips_disabled_cases(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -206,7 +235,13 @@ class SWEBenchBatchTest(unittest.TestCase):
                 )
                 return subprocess.CompletedProcess(command, 0, "resolved", "")
 
-            with patch("patchpilot.swebench_batch.subprocess.run", side_effect=fake_run):
+            with (
+                patch(
+                    "patchpilot.swebench_batch.importlib.util.find_spec",
+                    return_value=object(),
+                ),
+                patch("patchpilot.swebench_batch.subprocess.run", side_effect=fake_run),
+            ):
                 official = run_official_evaluation(runner.run_dir, cases)
             summary, summary_path = update_summary_with_official(
                 runner.run_dir,
@@ -221,6 +256,195 @@ class SWEBenchBatchTest(unittest.TestCase):
             self.assertEqual(summary["official"]["resolve_rate"], 1.0)
             self.assertEqual(summary["cases"][0]["official_status"], "resolved")
             self.assertTrue(summary_path.is_file())
+
+    def test_official_evaluation_fails_fast_when_harness_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cases = self._make_manifest(root)
+            runner = SWEBenchBatchRunner(
+                model=ScriptedModel(),
+                model_name="scripted-model",
+                cases=cases,
+                results_dir=root / "results",
+                run_id="missing-harness",
+            )
+            runner.generate()
+
+            with (
+                patch(
+                    "patchpilot.swebench_batch.importlib.util.find_spec",
+                    return_value=None,
+                ),
+                patch("patchpilot.swebench_batch.subprocess.run") as subprocess_run,
+            ):
+                official = run_official_evaluation(runner.run_dir, cases)
+
+            self.assertEqual(official.status, "error")
+            self.assertIsNone(official.returncode)
+            self.assertIn("uv run --with swebench", official.error or "")
+            subprocess_run.assert_not_called()
+            log = Path(official.log_path).read_text(encoding="utf-8")
+            self.assertIn("--stage official", log)
+            persisted = json.loads(
+                (runner.run_dir / "official" / "result.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(persisted["status"], "error")
+
+    def test_official_evaluation_temporarily_aliases_custom_image(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cases = self._make_manifest(root)
+            source = "sweb.eval.x86_64.example__repo-1:compat"
+            target = "sweb.eval.x86_64.example__repo-1:latest"
+            runner = SWEBenchBatchRunner(
+                model=ScriptedModel(),
+                model_name="scripted-model",
+                cases=cases,
+                results_dir=root / "results",
+                run_id="custom-image",
+            )
+            runner.generate()
+            cases[0] = replace(cases[0], docker_image=source)
+            images = {source: "sha256:custom"}
+
+            def fake_run(command, **kwargs):
+                if command[:3] == ["docker", "image", "inspect"]:
+                    image = command[-1]
+                    if image in images:
+                        return subprocess.CompletedProcess(
+                            command, 0, images[image] + "\n", ""
+                        )
+                    return subprocess.CompletedProcess(
+                        command, 1, "", f"No such image: {image}"
+                    )
+                if command[:2] == ["docker", "tag"]:
+                    images[command[3]] = images[command[2]]
+                    return subprocess.CompletedProcess(command, 0, "", "")
+                if command[:3] == ["docker", "image", "rm"]:
+                    images.pop(command[3])
+                    return subprocess.CompletedProcess(command, 0, "", "")
+                self.assertEqual(images[target], "sha256:custom")
+                self._write_official_report(command, Path(kwargs["cwd"]))
+                return subprocess.CompletedProcess(command, 0, "resolved", "")
+
+            with (
+                patch(
+                    "patchpilot.swebench_batch.importlib.util.find_spec",
+                    return_value=object(),
+                ),
+                patch("patchpilot.swebench_batch.subprocess.run", side_effect=fake_run),
+            ):
+                official = run_official_evaluation(runner.run_dir, cases)
+
+            self.assertEqual(official.status, "completed")
+            self.assertNotIn(target, images)
+            self.assertEqual(official.image_aliases[0]["action"], "created")
+            log = Path(official.log_path).read_text(encoding="utf-8")
+            self.assertIn("Temporarily created", log)
+            self.assertIn("Restored official image alias", log)
+
+    def test_official_evaluation_restores_preexisting_latest_image(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cases = self._make_manifest(root)
+            source = "sweb.eval.x86_64.example__repo-1:compat"
+            target = "sweb.eval.x86_64.example__repo-1:latest"
+            runner = SWEBenchBatchRunner(
+                model=ScriptedModel(),
+                model_name="scripted-model",
+                cases=cases,
+                results_dir=root / "results",
+                run_id="restore-image",
+            )
+            runner.generate()
+            cases[0] = replace(cases[0], docker_image=source)
+            images = {source: "sha256:custom", target: "sha256:original"}
+
+            def fake_run(command, **kwargs):
+                if command[:3] == ["docker", "image", "inspect"]:
+                    image = command[-1]
+                    if image in images:
+                        return subprocess.CompletedProcess(
+                            command, 0, images[image] + "\n", ""
+                        )
+                    return subprocess.CompletedProcess(
+                        command, 1, "", f"No such image: {image}"
+                    )
+                if command[:2] == ["docker", "tag"]:
+                    images[command[3]] = images[command[2]]
+                    return subprocess.CompletedProcess(command, 0, "", "")
+                if command[:3] == ["docker", "image", "rm"]:
+                    images.pop(command[3])
+                    return subprocess.CompletedProcess(command, 0, "", "")
+                self.assertEqual(images[target], "sha256:custom")
+                self._write_official_report(command, Path(kwargs["cwd"]))
+                return subprocess.CompletedProcess(command, 0, "resolved", "")
+
+            with (
+                patch(
+                    "patchpilot.swebench_batch.importlib.util.find_spec",
+                    return_value=object(),
+                ),
+                patch("patchpilot.swebench_batch.subprocess.run", side_effect=fake_run),
+            ):
+                official = run_official_evaluation(runner.run_dir, cases)
+
+            self.assertEqual(official.status, "completed")
+            self.assertEqual(images[target], "sha256:original")
+            self.assertFalse(any("patchpilot-backup" in image for image in images))
+            self.assertEqual(official.image_aliases[0]["action"], "replaced")
+
+    def test_official_evaluation_refuses_to_overwrite_concurrent_tag_change(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cases = self._make_manifest(root)
+            source = "sweb.eval.x86_64.example__repo-1:compat"
+            target = "sweb.eval.x86_64.example__repo-1:latest"
+            runner = SWEBenchBatchRunner(
+                model=ScriptedModel(),
+                model_name="scripted-model",
+                cases=cases,
+                results_dir=root / "results",
+                run_id="concurrent-image-change",
+            )
+            runner.generate()
+            cases[0] = replace(cases[0], docker_image=source)
+            images = {source: "sha256:custom"}
+
+            def fake_run(command, **kwargs):
+                if command[:3] == ["docker", "image", "inspect"]:
+                    image = command[-1]
+                    if image in images:
+                        return subprocess.CompletedProcess(
+                            command, 0, images[image] + "\n", ""
+                        )
+                    return subprocess.CompletedProcess(
+                        command, 1, "", f"No such image: {image}"
+                    )
+                if command[:2] == ["docker", "tag"]:
+                    images[command[3]] = images[command[2]]
+                    return subprocess.CompletedProcess(command, 0, "", "")
+                if command[:3] == ["docker", "image", "rm"]:
+                    images.pop(command[3])
+                    return subprocess.CompletedProcess(command, 0, "", "")
+                images[target] = "sha256:external"
+                self._write_official_report(command, Path(kwargs["cwd"]))
+                return subprocess.CompletedProcess(command, 0, "resolved", "")
+
+            with (
+                patch(
+                    "patchpilot.swebench_batch.importlib.util.find_spec",
+                    return_value=object(),
+                ),
+                patch("patchpilot.swebench_batch.subprocess.run", side_effect=fake_run),
+            ):
+                official = run_official_evaluation(runner.run_dir, cases)
+
+            self.assertEqual(official.status, "error")
+            self.assertEqual(images[target], "sha256:external")
+            self.assertIn("changed during evaluation", official.cleanup_errors[0])
 
     def test_empty_patch_counts_as_unresolved(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -310,6 +534,20 @@ class SWEBenchBatchTest(unittest.TestCase):
             encoding="utf-8",
         )
         return load_batch_manifest(manifest)
+
+    @staticmethod
+    def _write_official_report(command: list[str], cwd: Path) -> None:
+        run_id = command[command.index("--run_id") + 1]
+        report = {
+            "resolved_ids": ["example__repo-1"],
+            "unresolved_ids": [],
+            "error_ids": [],
+            "empty_patch_ids": [],
+            "incomplete_ids": [],
+        }
+        (cwd / f"scripted-model.{run_id}.json").write_text(
+            json.dumps(report), encoding="utf-8"
+        )
 
     @staticmethod
     def _record(instance: Path, source: Path, instance_id: str):

@@ -9,6 +9,7 @@ from .model import OpenAICompatibleModel
 from .swebench_batch import (
     SWEBenchBatchRunner,
     load_batch_manifest,
+    official_harness_available,
     preflight_cases,
     run_official_evaluation,
     update_summary_with_official,
@@ -84,6 +85,11 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--max-workers must be positive")
     if args.official_timeout < 1:
         parser.error("--official-timeout must be positive")
+    if args.stage in {"official", "all"} and not official_harness_available():
+        parser.error(
+            "official SWE-bench harness is unavailable; re-run this command with "
+            "`uv run --with swebench python -m patchpilot.evaluate_swebench_batch ...`"
+        )
 
     run_dir = args.run_dir.resolve() if args.run_dir is not None else None
     model_name: str

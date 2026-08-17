@@ -266,10 +266,27 @@ uv run --with swebench python -m patchpilot.evaluate_swebench_batch \
 ```
 
 Use `--stage all` to generate and grade in one process when the optional
-`swebench` package is available. The final summary separates generation errors,
-patch generation, `agent_verified`, official resolved/unresolved/error states,
-tool and patch-quality metrics, test freshness, first-edit step, duration, and
-official resolve rate.
+`swebench` package is available:
+
+```bash
+uv run --with swebench python -m patchpilot.evaluate_swebench_batch \
+  --manifest benchmarks/swebench/dev_manifest.jsonl \
+  --stage all
+```
+
+Both `official` and `all` now fail before evaluation (and before paid generation
+for `all`) with an actionable command when the optional harness is missing. The
+final summary separates generation errors, patch generation, `agent_verified`,
+official resolved/unresolved/error states, tool and patch-quality metrics, test
+freshness, first-edit step, duration, and official resolve rate.
+
+When an enabled manifest case names a qualified Docker image with a non-`latest`
+tag, the official stage temporarily exposes that exact image under the `latest`
+name expected by the SWE-bench harness. A pre-existing, different `latest` image
+is first protected by a unique backup tag and restored after the harness exits,
+including timeout and launch-error paths. Cleanup verifies image IDs and refuses
+to overwrite a tag changed concurrently by another process. Alias actions and
+cleanup errors are recorded in `official/result.json` and `official/harness.log`.
 
 Audit a completed official run without calling the model again:
 

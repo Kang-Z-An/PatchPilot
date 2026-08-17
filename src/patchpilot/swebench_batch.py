@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 import subprocess
@@ -179,6 +180,114 @@ class OfficialEvaluationResult:
     log_path: str
     returncode: int | None
     error: str | None = None
+    image_aliases: tuple[dict[str, str], ...] = ()
+    cleanup_errors: tuple[str, ...] = ()
+
+
+@dataclass
+class _DockerImageAlias:
+    source_image: str
+    target_image: str
+    source_id: str
+    previous_target_id: str | None
+    backup_image: str | None
+    restored: bool = False
+
+
+class _OfficialImageAliasSession:
+    def __init__(self, cases: list[SWEBenchBatchCase], namespace: str) -> None:
+        self.cases = [case for case in cases if case.enabled]
+        self.namespace = namespace.strip().rstrip("/")
+        self.aliases: list[_DockerImageAlias] = []
+        self.audit_records: list[dict[str, str]] = []
+        self.messages: list[str] = []
+
+    def prepare(self) -> None:
+        for case in self.cases:
+            source = case.docker_image
+            if source is None:
+                continue
+            target = _official_image_target(source, self.namespace)
+            if source == target:
+                continue
+            source_id = _inspect_docker_image(source)
+            assert source_id is not None
+            previous_id = _inspect_docker_image(target, allow_missing=True)
+            if previous_id == source_id:
+                self.audit_records.append(
+                    {"source": source, "target": target, "action": "reused"}
+                )
+                self.messages.append(
+                    f"Reused existing official image alias {target} for {source}."
+                )
+                continue
+
+            backup = None
+            if previous_id is not None:
+                backup = _backup_image_name(target)
+                _docker_tag(target, backup)
+            try:
+                _docker_tag(source, target)
+            except RuntimeError as exc:
+                if backup is not None:
+                    try:
+                        _remove_docker_tag(backup)
+                    except RuntimeError as cleanup_exc:
+                        raise RuntimeError(
+                            f"{exc}; backup-tag cleanup also failed: {cleanup_exc}"
+                        ) from exc
+                raise
+            alias = _DockerImageAlias(
+                source_image=source,
+                target_image=target,
+                source_id=source_id,
+                previous_target_id=previous_id,
+                backup_image=backup,
+            )
+            self.aliases.append(alias)
+            action = "replaced" if previous_id is not None else "created"
+            self.audit_records.append(
+                {"source": source, "target": target, "action": action}
+            )
+            self.messages.append(
+                f"Temporarily {action} official image alias {target} from {source}."
+            )
+
+    def restore(self) -> list[str]:
+        errors: list[str] = []
+        for alias in reversed(self.aliases):
+            if alias.restored:
+                continue
+            try:
+                current_id = _inspect_docker_image(
+                    alias.target_image,
+                    allow_missing=True,
+                )
+                if current_id not in {None, alias.source_id}:
+                    raise RuntimeError(
+                        "Refusing to restore Docker image alias because its target "
+                        f"changed during evaluation: {alias.target_image}"
+                    )
+                if alias.previous_target_id is None:
+                    if current_id is not None:
+                        _remove_docker_tag(alias.target_image)
+                else:
+                    assert alias.backup_image is not None
+                    backup_id = _inspect_docker_image(alias.backup_image)
+                    if backup_id != alias.previous_target_id:
+                        raise RuntimeError(
+                            "Docker image alias backup changed during evaluation: "
+                            f"{alias.backup_image}"
+                        )
+                    _docker_tag(alias.backup_image, alias.target_image)
+                    _remove_docker_tag(alias.backup_image)
+                alias.restored = True
+                self.messages.append(
+                    f"Restored official image alias {alias.target_image}."
+                )
+            except RuntimeError as exc:
+                errors.append(str(exc))
+        return errors
 
 
 def load_batch_manifest(path: Path) -> list[SWEBenchBatchCase]:
@@ -458,6 +567,47 @@ def run_official_evaluation(
     official_dir = run_dir / "official"
     official_dir.mkdir(exist_ok=True)
     log_path = official_dir / "harness.log"
+    if not official_harness_available():
+        error = (
+            "Official SWE-bench harness is unavailable. Re-run this stage with "
+            "`uv run --with swebench python -m "
+            "patchpilot.evaluate_swebench_batch ... --stage official`."
+        )
+        log_path.write_text(error + "\n", encoding="utf-8")
+        result = OfficialEvaluationResult(
+            status="error",
+            run_id=run_id,
+            report_path=None,
+            log_path=str(log_path),
+            returncode=None,
+            error=error,
+        )
+        _write_json(official_dir / "result.json", asdict(result))
+        return result
+    image_aliases = _OfficialImageAliasSession(cases, namespace)
+    try:
+        image_aliases.prepare()
+    except RuntimeError as exc:
+        cleanup_errors = image_aliases.restore()
+        error = f"Cannot prepare official Docker image aliases: {exc}"
+        if cleanup_errors:
+            error += "; cleanup also failed: " + "; ".join(cleanup_errors)
+        log_path.write_text(
+            _official_log(image_aliases.messages, error, cleanup_errors),
+            encoding="utf-8",
+        )
+        result = OfficialEvaluationResult(
+            status="error",
+            run_id=run_id,
+            report_path=None,
+            log_path=str(log_path),
+            returncode=None,
+            error=error,
+            image_aliases=tuple(image_aliases.audit_records),
+            cleanup_errors=tuple(cleanup_errors),
+        )
+        _write_json(official_dir / "result.json", asdict(result))
+        return result
     command = [
         sys.executable,
         "-m",
@@ -477,50 +627,154 @@ def run_official_evaluation(
         "--namespace",
         namespace,
     ]
+    completed: subprocess.CompletedProcess[str] | None = None
+    harness_output = ""
+    harness_error: str | None = None
     try:
-        completed = subprocess.run(
-            command,
-            cwd=official_dir,
-            text=True,
-            capture_output=True,
-            timeout=timeout_seconds,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as exc:
-        output = _combined_output(exc.stdout or "", exc.stderr or "")
-        log_path.write_text(output, encoding="utf-8")
-        result = OfficialEvaluationResult(
-            status="error",
-            run_id=run_id,
-            report_path=None,
-            log_path=str(log_path),
-            returncode=None,
-            error=f"Official evaluation timed out after {timeout_seconds}s",
-        )
-        _write_json(official_dir / "result.json", asdict(result))
-        return result
-    output = _combined_output(completed.stdout, completed.stderr)
-    log_path.write_text(output, encoding="utf-8")
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=official_dir,
+                text=True,
+                capture_output=True,
+                timeout=timeout_seconds,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            harness_output = _combined_output(exc.stdout or "", exc.stderr or "")
+            harness_error = f"Official evaluation timed out after {timeout_seconds}s"
+        except OSError as exc:
+            harness_error = f"Cannot start official evaluator: {exc}"
+        else:
+            harness_output = _combined_output(completed.stdout, completed.stderr)
+    finally:
+        cleanup_errors = image_aliases.restore()
+    log_path.write_text(
+        _official_log(image_aliases.messages, harness_output, cleanup_errors),
+        encoding="utf-8",
+    )
     reports = sorted(official_dir.glob(f"*.{run_id}.json"))
     report_path = reports[-1] if reports else None
-    error = None
+    error = harness_error
     status = "completed"
-    if completed.returncode != 0:
+    if harness_error is not None:
+        status = "error"
+    elif completed is None:
+        status = "error"
+        error = "Official evaluator did not return a result"
+    elif completed.returncode != 0:
         status = "error"
         error = f"Official evaluator exited with code {completed.returncode}"
     elif report_path is None:
         status = "error"
         error = "Official evaluator did not create a report"
+    if cleanup_errors:
+        status = "error"
+        cleanup_error = "Cannot restore official Docker image aliases: " + "; ".join(
+            cleanup_errors
+        )
+        error = f"{error}; {cleanup_error}" if error else cleanup_error
     result = OfficialEvaluationResult(
         status=status,
         run_id=run_id,
         report_path=str(report_path) if report_path is not None else None,
         log_path=str(log_path),
-        returncode=completed.returncode,
+        returncode=completed.returncode if completed is not None else None,
         error=error,
+        image_aliases=tuple(image_aliases.audit_records),
+        cleanup_errors=tuple(cleanup_errors),
     )
     _write_json(official_dir / "result.json", asdict(result))
     return result
+
+
+def official_harness_available() -> bool:
+    try:
+        return importlib.util.find_spec("swebench.harness.run_evaluation") is not None
+    except (AttributeError, ImportError, ModuleNotFoundError, ValueError):
+        return False
+
+
+def _official_image_target(source_image: str, namespace: str) -> str:
+    repository = _image_repository(source_image)
+    if namespace:
+        repository = f"{namespace}/{repository.rsplit('/', 1)[-1]}"
+    return f"{repository}:latest"
+
+
+def _image_repository(image: str) -> str:
+    if "@" in image:
+        raise RuntimeError(
+            f"Digest-pinned Docker images cannot be aliased for official evaluation: {image}"
+        )
+    last_slash = image.rfind("/")
+    last_colon = image.rfind(":")
+    return image[:last_colon] if last_colon > last_slash else image
+
+
+def _backup_image_name(target: str) -> str:
+    repository = _image_repository(target)
+    return f"{repository}:patchpilot-backup-{uuid4().hex}"
+
+
+def _inspect_docker_image(image: str, allow_missing: bool = False) -> str | None:
+    try:
+        completed = subprocess.run(
+            ["docker", "image", "inspect", "--format", "{{.Id}}", image],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError as exc:
+        raise RuntimeError(f"Cannot run Docker while inspecting {image}: {exc}") from exc
+    if completed.returncode == 0:
+        image_id = completed.stdout.strip()
+        if image_id:
+            return image_id
+        raise RuntimeError(f"Docker returned no image id for {image}")
+    detail = _combined_output(completed.stdout, completed.stderr).strip()
+    missing = "no such image" in detail.lower() or "no such object" in detail.lower()
+    if allow_missing and missing:
+        return None
+    raise RuntimeError(f"Cannot inspect Docker image {image}: {detail or 'unknown error'}")
+
+
+def _docker_tag(source: str, target: str) -> None:
+    _run_docker_mutation(["docker", "tag", source, target], f"tag {source} as {target}")
+
+
+def _remove_docker_tag(image: str) -> None:
+    _run_docker_mutation(["docker", "image", "rm", image], f"remove tag {image}")
+
+
+def _run_docker_mutation(command: list[str], action: str) -> None:
+    try:
+        completed = subprocess.run(
+            command,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError as exc:
+        raise RuntimeError(f"Cannot run Docker to {action}: {exc}") from exc
+    if completed.returncode != 0:
+        detail = _combined_output(completed.stdout, completed.stderr).strip()
+        raise RuntimeError(f"Cannot {action}: {detail or 'unknown Docker error'}")
+
+
+def _official_log(
+    alias_messages: list[str],
+    harness_output: str,
+    cleanup_errors: list[str],
+) -> str:
+    sections: list[str] = []
+    if alias_messages:
+        sections.append("Docker image aliases:\n" + "\n".join(alias_messages))
+    if harness_output.strip():
+        sections.append("Official harness:\n" + harness_output.strip())
+    if cleanup_errors:
+        sections.append("Docker alias cleanup errors:\n" + "\n".join(cleanup_errors))
+    return "\n\n".join(sections).rstrip() + "\n"
 
 
 def update_summary_with_official(
