@@ -26,7 +26,7 @@ class PreferenceExportConfig:
 
     max_invalid_actions: int = 0
     max_tool_failure_rate: float = 0.25
-    max_observation_chars: int = 12_000
+    max_observation_chars: int | None = None
 
     def validate(self) -> None:
         ExportConfig(

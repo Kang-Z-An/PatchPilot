@@ -33,7 +33,7 @@ class ExportConfig:
     allow_legacy: bool = False
     max_invalid_actions: int = 0
     max_tool_failure_rate: float = 0.25
-    max_observation_chars: int = 12_000
+    max_observation_chars: int | None = None
     train_ratio: float = 0.8
     dev_ratio: float = 0.1
     test_ratio: float = 0.1
@@ -44,7 +44,7 @@ class ExportConfig:
             raise ValueError("max_invalid_actions cannot be negative")
         if not 0 <= self.max_tool_failure_rate <= 1:
             raise ValueError("max_tool_failure_rate must be between 0 and 1")
-        if self.max_observation_chars < 1:
+        if self.max_observation_chars is not None and self.max_observation_chars < 1:
             raise ValueError("max_observation_chars must be positive")
         ratios = (self.train_ratio, self.dev_ratio, self.test_ratio)
         if any(ratio < 0 for ratio in ratios):
@@ -239,7 +239,9 @@ def discover_trajectories(inputs: Iterable[Path]) -> list[Path]:
     return sorted(candidates)
 
 
-def parse_trajectory(path: Path, max_observation_chars: int = 12_000) -> ParsedTrajectory:
+def parse_trajectory(
+    path: Path, max_observation_chars: int | None = None
+) -> ParsedTrajectory:
     events = _load_events(path)
     start = events[0]
     terminal = events[-1]
@@ -382,6 +384,8 @@ def _quality_rejection(
         return "not_verified"
     if parsed.fidelity != "exact" and not config.allow_legacy:
         return "legacy_not_allowed"
+    if parsed.truncated_observations:
+        return "truncated_observations"
     metrics = terminal.get("metrics")
     if not isinstance(metrics, dict):
         metrics = {}
@@ -418,7 +422,7 @@ def _quality_rejection(
 
 
 def _exact_messages(
-    events: list[dict[str, Any]], max_chars: int
+    events: list[dict[str, Any]], max_chars: int | None
 ) -> tuple[list[dict[str, str]], int]:
     messages = [dict(message) for message in events[0]["initial_messages"]]
     truncated = 0
@@ -442,7 +446,7 @@ def _exact_messages(
 
 
 def _legacy_messages(
-    events: list[dict[str, Any]], max_chars: int
+    events: list[dict[str, Any]], max_chars: int | None
 ) -> tuple[list[dict[str, str]], int]:
     issue = events[0].get("issue")
     if not isinstance(issue, str) or not issue.strip():
@@ -594,8 +598,8 @@ def _valid_messages(value: Any) -> bool:
     )
 
 
-def _truncate(value: str, max_chars: int) -> tuple[str, int]:
-    if len(value) <= max_chars:
+def _truncate(value: str, max_chars: int | None) -> tuple[str, int]:
+    if max_chars is None or len(value) <= max_chars:
         return value, 0
     return value[:max_chars] + "\n...[observation truncated during export]", 1
 

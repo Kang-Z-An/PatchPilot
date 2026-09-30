@@ -57,6 +57,30 @@ class TrainingDataExportTest(unittest.TestCase):
             self.assertEqual(record["metadata"]["fidelity"], "legacy_approximate")
             self.assertEqual(record["task_id"], "example__repo-1")
 
+    def test_exact_export_preserves_full_observation_and_rejects_capped_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write_exact(root / "trace.jsonl", "task-long", "x" * 100)
+
+            full = export_sft_dataset([root / "trace.jsonl"], root / "full")
+            capped = export_sft_dataset(
+                [root / "trace.jsonl"],
+                root / "capped",
+                ExportConfig(max_observation_chars=20),
+            )
+
+            record = self._records(root / "full")[0]
+            observation = next(
+                message["content"]
+                for message in record["messages"]
+                if message["role"] == "user" and message["content"].startswith('{"tool"')
+            )
+            self.assertIn("x" * 100, observation)
+            self.assertEqual(record["metadata"]["truncated_observations"], 0)
+            self.assertEqual(full["accepted_samples"], 1)
+            self.assertEqual(capped["accepted_samples"], 0)
+            self.assertEqual(capped["rejection_reasons"], {"truncated_observations": 1})
+
     def test_rejects_official_failure_test_edits_and_possible_secrets(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

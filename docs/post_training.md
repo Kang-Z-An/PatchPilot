@@ -55,6 +55,19 @@ A strict SFT sample must satisfy all available evidence:
 6. No recognizable API key or authorization secret appears in the conversation.
 7. An identical conversation has not already been exported.
 
+Strict export now keeps each original tool observation in full. An optional
+`--max-observation-chars` limit rejects an over-limit trajectory instead of
+silently truncating context and labeling it exact. Earlier 12,000-character
+exports shortened three observations across two of the seven accepted train
+samples; the corrected export retains all seven without truncation. See
+`experiments/training_pool_v1_deepseek/sft_data_audit.json`.
+
+For SFT, supervise assistant messages containing the JSON tool actions and
+final answer. Keep system/user messages and tool observations as context only.
+The seven exported conversations are 24,607–61,229 characters each, so choose
+sequence length from the selected model's tokenizer counts. Character counts
+alone cannot establish whether a model context or GPU memory budget is safe.
+
 For frozen benchmark pools, samples preserve the task's preassigned
 `pool_split` from the batch snapshot. Older snapshots are recovered through
 their recorded instance file. Ad-hoc runs without either source use a seeded

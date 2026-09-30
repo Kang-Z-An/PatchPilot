@@ -29,6 +29,8 @@ gold-patch-informed error analysis is in
 [`failure_analysis.md`](failure_analysis.md).
 The pre-correction preference-export dry run is recorded in
 [`preference_pipeline_audit.json`](preference_pipeline_audit.json).
+The full-observation SFT export and its pre-training data audit are recorded in
+[`sft_data_audit.json`](sft_data_audit.json).
 
 ## Interpretation
 

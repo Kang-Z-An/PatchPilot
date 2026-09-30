@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "audit_date": "2026-09-30",
+  "source_runs": [
+    "v050-train-smoke-public-tests-r1",
+    "v051-train-half1-public-tests-r1",
+    "v051-train-remaining4-public-tests-r1"
+  ],
+  "old_export": {
+    "observation_limit_characters": 12000,
+    "accepted_samples": 7,
+    "truncated_observations": 3,
+    "affected_task_ids": [
+      "pydicom__pydicom-1256",
+      "sqlfluff__sqlfluff-2907"
+    ]
+  },
+  "new_export": {
+    "location": ".patchpilot/training/v051-train-full16-untruncated-v1/train.jsonl",
+    "sha256": "c4532333678ef4f2c3671c3cdd023e4e19f0a12f54aaee7d2ffa085cbb0defa8",
+    "trajectories_found": 16,
+    "accepted_samples": 7,
+    "rejected_official_unresolved": 9,
+    "split": "train",
+    "truncated_observations": 0,
+    "min_median_max_conversation_characters": [24607, 42123, 61229],
+    "max_single_message_characters": 20879,
+    "assistant_turns_min_max": [12, 21],
+    "all_roles_alternate_after_initial_system_user": true,
+    "all_assistant_messages_parse_as_json_objects": true,
+    "all_final_assistant_messages_have_final_field": true,
+    "total_conversation_characters": 306903,
+    "total_assistant_characters": 16643,
+    "assistant_character_fraction": 0.0542
+  },
+  "training_implications": {
+    "supervise_assistant_messages_only": true,
+    "tool_observations_are_context_only": true,
+    "token_counts_measured": false,
+    "tokenizer_template_and_context_budget_pending": true
+  },
+  "limitations": [
+    "Character counts are not token counts or GPU memory measurements.",
+    "The seven train samples validate data flow but are too few to establish a reliable model improvement."
+  ]
+}

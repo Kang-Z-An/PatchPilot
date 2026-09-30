@@ -26,7 +26,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--max-invalid-actions", type=int, default=0)
     parser.add_argument("--max-tool-failure-rate", type=float, default=0.25)
-    parser.add_argument("--max-observation-chars", type=int, default=12_000)
+    parser.add_argument(
+        "--max-observation-chars",
+        type=int,
+        help="Reject trajectories with observations above this limit; the default keeps all observations",
+    )
     parser.add_argument(
         "--train-ratio",
         type=float,

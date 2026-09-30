@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from patchpilot.preference_data import export_preference_dataset
+from patchpilot.preference_data import PreferenceExportConfig, export_preference_dataset
 
 
 class PreferenceDataExportTest(unittest.TestCase):
@@ -60,6 +60,27 @@ class PreferenceDataExportTest(unittest.TestCase):
             self.assertEqual(
                 report["candidate_rejection_reasons"]["rejected"],
                 {"official_status_missing": 1},
+            )
+
+    def test_capped_observation_cannot_enter_preference_pair(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rejected = root / "rejected"
+            chosen = root / "chosen"
+            self._write_candidate(rejected, "task-a", "unresolved", "original")
+            self._write_candidate(chosen, "task-a", "resolved", "corrected")
+
+            report = export_preference_dataset(
+                [rejected],
+                [chosen],
+                root / "dataset",
+                PreferenceExportConfig(max_observation_chars=20),
+            )
+
+            self.assertEqual(report["preference_pairs"], 0)
+            self.assertEqual(
+                report["candidate_rejection_reasons"]["rejected"],
+                {"truncated_observations": 1},
             )
 
     def test_rejects_non_train_and_hash_fallback_splits(self) -> None:
