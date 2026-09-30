@@ -31,6 +31,35 @@ The pre-correction preference-export dry run is recorded in
 [`preference_pipeline_audit.json`](preference_pipeline_audit.json).
 The full-observation SFT export and its pre-training data audit are recorded in
 [`sft_data_audit.json`](sft_data_audit.json).
+The pinned Qwen2.5-Coder-7B-Instruct tokenizer and assistant-label audit is in
+[`tokenizer_audit_qwen25coder7b.json`](tokenizer_audit_qwen25coder7b.json).
+
+## SFT token audit
+
+The seven accepted train conversations contain 92,297 tokens in total under
+Qwen2.5-Coder-7B-Instruct's pinned chat template. Only 4,685 tokens (5.08%)
+belong to assistant content/end-of-turn labels; system instructions, issues,
+tool observations, and assistant role headers are context-only. Individual
+conversations range from 7,016 to 18,427 tokens (median 11,772), all below
+the tokenizer's 32,768-token configured limit. The longest prefix before an
+assistant answer is 18,356 tokens. This is a context-length check, **not** a
+GPU memory or training-throughput validation. The tokenizer's chat template
+does not provide a generation-tag mask, so the audit verifies stable rendered
+message prefixes and constructs labels explicitly; it fails if boundaries
+cannot be isolated.
+
+Reproduce without downloading model weights or using a GPU:
+
+```bash
+uv run --with 'transformers==4.57.6' --with jinja2 \
+  python -m patchpilot.audit_sft_tokens \
+  --input .patchpilot/training/v051-train-full16-untruncated-v1/train.jsonl \
+  --output experiments/training_pool_v1_deepseek/tokenizer_audit_qwen25coder7b.json
+```
+
+The report pins the tokenizer commit, chat-template hash, Transformers version,
+and input SHA-256. It records counts but no raw messages. It does not establish
+that seven examples are sufficient for a useful fine-tune.
 
 ## Interpretation
 

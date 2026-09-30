@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "input_sha256": "c4532333678ef4f2c3671c3cdd023e4e19f0a12f54aaee7d2ffa085cbb0defa8",
+  "tokenizer": {
+    "model": "Qwen/Qwen2.5-Coder-7B-Instruct",
+    "revision": "c03e6d358207e414f1eca0bb1891e29f1db0e242",
+    "transformers_version": "4.57.6",
+    "chat_template_sha256": "cd8e9439f0570856fd70470bf8889ebd8b5d1107207f67a5efb46e342330527f",
+    "model_max_length": 32768,
+    "automatic_assistant_mask_supported": false
+  },
+  "mask_policy": "assistant content plus end-of-turn marker; role headers and all system/user text masked",
+  "sample_count": 7,
+  "total_tokens": 92297,
+  "assistant_label_tokens": 4685,
+  "assistant_label_fraction": 0.05076,
+  "min_median_max_total_tokens": [
+    7016,
+    11772,
+    18427
+  ],
+  "max_assistant_prefix_tokens": 18356,
+  "all_fit_tokenizer_context": true,
+  "samples": [
+    {
+      "task_id": "marshmallow-code__marshmallow-1164",
+      "sample_id": "19ad24061b2a47507b25",
+      "total_tokens": 8739,
+      "assistant_label_tokens": 671,
+      "context_only_tokens": 8068,
+      "assistant_turns": 16,
+      "longest_assistant_prefix_tokens": 8656,
+      "fits_tokenizer_context": true
+    },
+    {
+      "task_id": "marshmallow-code__marshmallow-1343",
+      "sample_id": "6eb17c9522236554fe49",
+      "total_tokens": 11772,
+      "assistant_label_tokens": 566,
+      "context_only_tokens": 11206,
+      "assistant_turns": 14,
+      "longest_assistant_prefix_tokens": 11619,
+      "fits_tokenizer_context": true
+    },
+    {
+      "task_id": "marshmallow-code__marshmallow-1524",
+      "sample_id": "bbfe92eacd4360ec0b8a",
+      "total_tokens": 17126,
+      "assistant_label_tokens": 1061,
+      "context_only_tokens": 16065,
+      "assistant_turns": 21,
+      "longest_assistant_prefix_tokens": 16971,
+      "fits_tokenizer_context": true
+    },
+    {
+      "task_id": "marshmallow-code__marshmallow-1810",
+      "sample_id": "9b2442ae81fea48ebccf",
+      "total_tokens": 7016,
+      "assistant_label_tokens": 464,
+      "context_only_tokens": 6552,
+      "assistant_turns": 13,
+      "longest_assistant_prefix_tokens": 6937,
+      "fits_tokenizer_context": true
+    },
+    {
+      "task_id": "pydicom__pydicom-1256",
+      "sample_id": "b4f4a9cce76c51ff5a93",
+      "total_tokens": 18427,
+      "assistant_label_tokens": 463,
+      "context_only_tokens": 17964,
+      "assistant_turns": 13,
+      "longest_assistant_prefix_tokens": 18356,
+      "fits_tokenizer_context": true
+    },
+    {
+      "task_id": "pylint-dev__astroid-1614",
+      "sample_id": "c8358ca66d3a8422d485",
+      "total_tokens": 11516,
+      "assistant_label_tokens": 512,
+      "context_only_tokens": 11004,
+      "assistant_turns": 12,
+      "longest_assistant_prefix_tokens": 11374,
+      "fits_tokenizer_context": true
+    },
+    {
+      "task_id": "sqlfluff__sqlfluff-2907",
+      "sample_id": "eb826d05cc5faa649b47",
+      "total_tokens": 17701,
+      "assistant_label_tokens": 948,
+      "context_only_tokens": 16753,
+      "assistant_turns": 14,
+      "longest_assistant_prefix_tokens": 17591,
+      "fits_tokenizer_context": true
+    }
+  ]
+}
