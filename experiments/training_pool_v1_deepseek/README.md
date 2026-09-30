@@ -33,6 +33,9 @@ The full-observation SFT export and its pre-training data audit are recorded in
 [`sft_data_audit.json`](sft_data_audit.json).
 The pinned Qwen2.5-Coder-7B-Instruct tokenizer and assistant-label audit is in
 [`tokenizer_audit_qwen25coder7b.json`](tokenizer_audit_qwen25coder7b.json).
+The CPU-only, training-ready JSONL build is summarized in
+[`sft_tokenized_dataset_audit.json`](sft_tokenized_dataset_audit.json); the
+tokenized rows themselves remain ignored under `.patchpilot/`.
 
 ## SFT token audit
 
@@ -60,6 +63,12 @@ uv run --with 'transformers==4.57.6' --with jinja2 \
 The report pins the tokenizer commit, chat-template hash, Transformers version,
 and input SHA-256. It records counts but no raw messages. It does not establish
 that seven examples are sufficient for a useful fine-tune.
+
+The subsequent data builder produced seven `input_ids` / `attention_mask` /
+`labels` rows with 92,297 input tokens, of which 4,685 are assistant labels and
+87,612 are masked context. It rejects overlength rows without truncation and
+requires preassigned, officially resolved train examples. This output is ready
+for a training-loader smoke test, but no SFT/LoRA job has run.
 
 ## Interpretation
 

@@ -64,9 +64,29 @@ samples; the corrected export retains all seven without truncation. See
 
 For SFT, supervise assistant messages containing the JSON tool actions and
 final answer. Keep system/user messages and tool observations as context only.
-The seven exported conversations are 24,607–61,229 characters each, so choose
-sequence length from the selected model's tokenizer counts. Character counts
-alone cannot establish whether a model context or GPU memory budget is safe.
+The seven exported conversations are 24,607–61,229 characters each. The pinned
+Qwen2.5-Coder-7B-Instruct audit measures 7,016–18,427 tokens per conversation;
+all seven fit its tokenizer's 32,768-token limit. This is not a GPU-memory
+measurement or evidence of model improvement.
+
+Convert the strict, officially resolved train partition into causal-LM rows:
+
+```bash
+uv run --with 'transformers==4.57.6' --with jinja2 \
+  python -m patchpilot.prepare_sft_dataset \
+  --input .patchpilot/training/v051-train-full16-untruncated-v1/train.jsonl \
+  --output .patchpilot/training/v051-train-full16-untruncated-v1/train.qwen25coder7b.tokens.jsonl \
+  --report experiments/training_pool_v1_deepseek/sft_tokenized_dataset_audit.json
+```
+
+Each row contains `input_ids`, an all-ones `attention_mask`, and aligned
+`labels`: assistant content and its end-of-turn suffix retain their token IDs;
+all other positions are `-100` and do not contribute to the causal-LM loss.
+The builder requires exact, untruncated, verified, officially resolved samples
+from preassigned train tasks. It rejects duplicates and sequences above
+`--max-seq-length` (default 32,768) without silently clipping any observation.
+The tokenized JSONL is kept under ignored `.patchpilot/`; only hashes and
+aggregate counts are committed. No model weights or GPU are used in this step.
 
 For frozen benchmark pools, samples preserve the task's preassigned
 `pool_split` from the batch snapshot. Older snapshots are recovered through
