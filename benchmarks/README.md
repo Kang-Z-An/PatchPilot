@@ -77,7 +77,7 @@ between generation and official grading.
 Prepare the pilot's local amd64 images with the official SWE-bench harness:
 
 ```bash
-uv run --with swebench python -m swebench.harness.prepare_images \
+uv run --with 'swebench==4.1.0' python -m swebench.harness.prepare_images \
   --dataset_name princeton-nlp/SWE-bench_Verified \
   --split test \
   --instance_ids \
@@ -114,7 +114,7 @@ grader. Keeping generation and grading separate makes interrupted runs
 resumable and avoids accidentally regenerating predictions:
 
 ```bash
-uv run --with swebench python -m patchpilot.evaluate_swebench_batch \
+uv run --with 'swebench==4.1.0' python -m patchpilot.evaluate_swebench_batch \
   --manifest benchmarks/swebench/pilot_v1_manifest.jsonl \
   --stage official \
   --run-dir /absolute/path/to/the/generated/run

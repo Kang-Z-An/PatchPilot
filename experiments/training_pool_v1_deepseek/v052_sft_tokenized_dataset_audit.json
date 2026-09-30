@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "input_sha256": "d57d15fc2d2ee156657891844d794b09cf0002fa3123d561c15d02fc81323e9c",
+  "output_sha256": "93a2eb88952d74038277d96dee5a2b305183e77f57b3eba386dc4e4e929e8373",
+  "tokenizer": {
+    "model": "Qwen/Qwen2.5-Coder-7B-Instruct",
+    "revision": "c03e6d358207e414f1eca0bb1891e29f1db0e242",
+    "transformers_version": "4.57.6",
+    "chat_template_sha256": "cd8e9439f0570856fd70470bf8889ebd8b5d1107207f67a5efb46e342330527f"
+  },
+  "max_seq_length": 32768,
+  "overlength_policy": "reject_without_truncation",
+  "mask_policy": "assistant content and end-of-turn only; all other tokens use -100",
+  "split": "train",
+  "samples": 8,
+  "total_tokens": 98348,
+  "assistant_label_tokens": 5466,
+  "masked_context_tokens": 92882,
+  "min_max_tokens": [
+    6051,
+    18427
+  ],
+  "all_attention_masks_are_one": true,
+  "no_empty_label_samples": true
+}

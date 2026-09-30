@@ -276,8 +276,11 @@ manifest snapshot and model name must match the original run.
 Run official grading separately so an evaluator or Docker failure never causes
 another paid model rollout:
 
+Pin `swebench==4.1.0` for this evaluator. The newer 5.0.2 harness changed its
+CLI and instance schema; an unpinned install is not an equivalent evaluation.
+
 ```bash
-uv run --with swebench python -m patchpilot.evaluate_swebench_batch \
+uv run --with 'swebench==4.1.0' python -m patchpilot.evaluate_swebench_batch \
   --manifest benchmarks/swebench/dev_manifest.jsonl \
   --stage official \
   --run-dir .patchpilot/swebench/batch/<run-id>
@@ -287,7 +290,7 @@ Use `--stage all` to generate and grade in one process when the optional
 `swebench` package is available:
 
 ```bash
-uv run --with swebench python -m patchpilot.evaluate_swebench_batch \
+uv run --with 'swebench==4.1.0' python -m patchpilot.evaluate_swebench_batch \
   --manifest benchmarks/swebench/dev_manifest.jsonl \
   --stage all
 ```
@@ -324,7 +327,7 @@ official resolved count or resolve rate.
 Run the official Docker evaluator on the generated prediction separately:
 
 ```bash
-uv run --with swebench python -m swebench.harness.run_evaluation \
+uv run --with 'swebench==4.1.0' python -m swebench.harness.run_evaluation \
   --dataset_name princeton-nlp/SWE-bench_Verified \
   --split test \
   --predictions_path /path/to/predictions.jsonl \

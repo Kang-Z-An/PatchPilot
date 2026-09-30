@@ -8,21 +8,36 @@ import urllib.request
 class OpenAICompatibleModel:
     """Minimal client for OpenAI-compatible chat-completions endpoints."""
 
-    def __init__(self, model: str, api_key: str, base_url: str, timeout_seconds: int = 120) -> None:
+    def __init__(
+        self,
+        model: str,
+        api_key: str,
+        base_url: str,
+        timeout_seconds: int = 120,
+        temperature: float = 0.0,
+        thinking_mode: str | None = None,
+    ) -> None:
+        if not 0 <= temperature <= 2:
+            raise ValueError("temperature must be between 0 and 2")
+        if thinking_mode not in {None, "enabled", "disabled"}:
+            raise ValueError("thinking_mode must be enabled, disabled, or unset")
         self.model = model
         self.api_key = api_key
         self.url = base_url.rstrip("/") + "/chat/completions"
         self.timeout_seconds = timeout_seconds
+        self.temperature = temperature
+        self.thinking_mode = thinking_mode
 
     def complete(self, messages: list[dict[str, str]]) -> str:
-        body = json.dumps(
-            {
-                "model": self.model,
-                "messages": messages,
-                "temperature": 0,
-                "response_format": {"type": "json_object"},
-            }
-        ).encode("utf-8")
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": self.temperature,
+            "response_format": {"type": "json_object"},
+        }
+        if self.thinking_mode is not None:
+            payload["thinking"] = {"type": self.thinking_mode}
+        body = json.dumps(payload).encode("utf-8")
         request = urllib.request.Request(
             self.url,
             data=body,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from importlib import metadata
 from pathlib import Path
 
 from .cli import load_model_config
@@ -14,6 +15,9 @@ from .swebench_batch import (
     run_official_evaluation,
     update_summary_with_official,
 )
+
+
+SUPPORTED_SWEBENCH_VERSION = "4.1.0"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -37,6 +41,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip Docker image inspection during --validate-only",
     )
     parser.add_argument("--model", help="Model name; overrides PATCHPILOT_MODEL")
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=0.0,
+        help="Generation sampling temperature (default: 0); recorded for resume",
+    )
+    parser.add_argument(
+        "--thinking-mode",
+        choices=("enabled", "disabled"),
+        help="Optional DeepSeek thinking switch; omitted by default",
+    )
     parser.add_argument("--env-file", type=Path, default=Path(".env"))
     parser.add_argument(
         "--results-dir",
@@ -83,13 +98,26 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--stage official requires --run-dir")
     if args.max_workers < 1:
         parser.error("--max-workers must be positive")
+    if not 0 <= args.temperature <= 2:
+        parser.error("--temperature must be between 0 and 2")
     if args.official_timeout < 1:
         parser.error("--official-timeout must be positive")
     if args.stage in {"official", "all"} and not official_harness_available():
         parser.error(
             "official SWE-bench harness is unavailable; re-run this command with "
-            "`uv run --with swebench python -m patchpilot.evaluate_swebench_batch ...`"
+            "`uv run --with swebench==4.1.0 python -m "
+            "patchpilot.evaluate_swebench_batch ...`"
         )
+    if args.stage in {"official", "all"}:
+        try:
+            installed_version = metadata.version("swebench")
+        except metadata.PackageNotFoundError:
+            parser.error("Cannot identify the installed SWE-bench harness version")
+        if installed_version != SUPPORTED_SWEBENCH_VERSION:
+            parser.error(
+                f"SWE-bench harness {installed_version} is incompatible with this "
+                f"evaluator; use `uv run --with swebench=={SUPPORTED_SWEBENCH_VERSION} ...`"
+            )
 
     run_dir = args.run_dir.resolve() if args.run_dir is not None else None
     model_name: str
@@ -101,6 +129,8 @@ def main(argv: list[str] | None = None) -> int:
             api_key,
             base_url,
             max(case.timeout for case in cases if case.enabled),
+            temperature=args.temperature,
+            thinking_mode=args.thinking_mode,
         )
         runner = SWEBenchBatchRunner(
             model=model,
@@ -113,6 +143,8 @@ def main(argv: list[str] | None = None) -> int:
             docker_cpus=args.docker_cpus,
             docker_memory=args.docker_memory,
             docker_pids_limit=args.docker_pids_limit,
+            temperature=args.temperature,
+            thinking_mode=args.thinking_mode,
         )
         summary, summary_path = runner.generate(resume=args.resume)
         run_dir = summary_path.parent

@@ -63,7 +63,7 @@ uv run python -m patchpilot.evaluate_swebench_batch \
 Grade the generated predictions with the official harness:
 
 ```bash
-uv run --with swebench python -m patchpilot.evaluate_swebench_batch \
+uv run --with 'swebench==4.1.0' python -m patchpilot.evaluate_swebench_batch \
   --manifest benchmarks/swebench/pilot_v1_manifest.jsonl \
   --stage official \
   --run-dir .patchpilot/swebench/batch/pilot-v1-deepseek \

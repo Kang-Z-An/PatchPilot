@@ -36,6 +36,9 @@ The pinned Qwen2.5-Coder-7B-Instruct tokenizer and assistant-label audit is in
 The CPU-only, training-ready JSONL build is summarized in
 [`sft_tokenized_dataset_audit.json`](sft_tokenized_dataset_audit.json); the
 tokenized rows themselves remain ignored under `.patchpilot/`.
+The first corrected train case and its updated eight-sample SFT export are
+recorded in [`v052_correction_smoke_audit.json`](v052_correction_smoke_audit.json)
+and [`v052_sft_tokenized_dataset_audit.json`](v052_sft_tokenized_dataset_audit.json).
 
 ## SFT token audit
 
@@ -69,6 +72,44 @@ The subsequent data builder produced seven `input_ids` / `attention_mask` /
 87,612 are masked context. It rejects overlength rows without truncation and
 requires preassigned, officially resolved train examples. This output is ready
 for a training-loader smoke test, but no SFT/LoRA job has run.
+
+## First corrected train case (v0.5.2 follow-up)
+
+`pydicom__pydicom-800` was unresolved in the original 16-task baseline. A
+separate one-case correction run, with the same initial prompt and explicit
+DeepSeek `thinking=disabled`, generated a new patch in eight steps with zero
+invalid actions. SWE-bench harness **4.1.0** graded it resolved (1/1, zero
+errors). The strict SFT exporter accepted one new train sample, and the
+preference exporter produced one same-task, same-prompt chosen/rejected pair.
+The combined strict train dataset now contains **8** samples from 8 tasks,
+98,348 input tokens, and 5,466 assistant-label tokens. The remaining eight
+failed train tasks have not yet been corrected; this is not a 9-case result.
+
+Earlier exploratory attempts using provider-default thinking generated
+additional tool-call markup after JSON, resulting in 3–5 invalid actions.
+One such patch officially resolved the issue but was rejected by the strict
+training-data quality gate. The [DeepSeek Chat Completions API](https://api-docs.deepseek.com/api/create-chat-completion/)
+currently documents thinking mode as the default and says temperature has no
+effect in that mode. The request model name also does not pin the provider's
+backing revision, so these runs are not controlled model-version comparisons.
+
+Reproduce the accepted correction and official grade with distinct run IDs:
+
+```bash
+uv run python -m patchpilot.evaluate_swebench_batch \
+  --manifest benchmarks/training_pool_v1/manifest_train_correction_smoke.jsonl \
+  --stage generate --thinking-mode disabled --temperature 0.3 \
+  --run-id <new-correction-run-id>
+
+uv run --with 'swebench==4.1.0' python -m patchpilot.evaluate_swebench_batch \
+  --manifest benchmarks/training_pool_v1/manifest_train_correction_smoke.jsonl \
+  --stage official --run-dir .patchpilot/swebench/batch/<new-correction-run-id> \
+  --dataset-name princeton-nlp/SWE-bench --split dev --max-workers 1
+```
+
+The pinned harness matters: the later PyPI `swebench` 5.0.2 CLI and input
+schema are incompatible with this evaluator. PatchPilot now rejects that
+version before a combined generate-and-grade stage can make paid model calls.
 
 ## Interpretation
 
@@ -136,7 +177,7 @@ uv run python -m patchpilot.evaluate_swebench_batch \
   --stage generate \
   --run-id <new-run-id>
 
-uv run --with swebench python -m patchpilot.evaluate_swebench_batch \
+uv run --with 'swebench==4.1.0' python -m patchpilot.evaluate_swebench_batch \
   --manifest benchmarks/training_pool_v1/manifest_train.jsonl \
   --stage official \
   --run-dir .patchpilot/swebench/batch/<new-run-id> \

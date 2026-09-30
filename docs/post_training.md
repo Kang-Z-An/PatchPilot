@@ -117,6 +117,13 @@ accepts seven and rejects nine. The baseline and failure analysis are frozen in
 `manifest_train_corrections.jsonl`; they remain rejected examples until a
 same-prompt corrected rollout is officially resolved.
 
+The first correction smoke test has now resolved `pydicom__pydicom-800` under
+the pinned official harness, with zero invalid actions. Its original unresolved
+and new resolved trajectories pass the exact-prompt preference pairing gate.
+Combining the accepted correction with the unchanged original baseline gives
+eight strict train SFT samples; the other eight correction tasks remain open.
+See `experiments/training_pool_v1_deepseek/v052_correction_smoke_audit.json`.
+
 Reproduce the two audits:
 
 ```bash

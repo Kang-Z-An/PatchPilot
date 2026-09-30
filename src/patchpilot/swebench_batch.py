@@ -380,9 +380,17 @@ class SWEBenchBatchRunner:
         docker_cpus: float = 2.0,
         docker_memory: str = "4g",
         docker_pids_limit: int = 512,
+        temperature: float = 0.0,
+        thinking_mode: str | None = None,
     ) -> None:
+        if not 0 <= temperature <= 2:
+            raise ValueError("temperature must be between 0 and 2")
+        if thinking_mode not in {None, "enabled", "disabled"}:
+            raise ValueError("thinking_mode must be enabled, disabled, or unset")
         self.model = model
         self.model_name = model_name
+        self.temperature = temperature
+        self.thinking_mode = thinking_mode
         self.cases = [case for case in cases if case.enabled]
         self.results_dir = results_dir.resolve()
         self.docker_platform = docker_platform
@@ -453,6 +461,14 @@ class SWEBenchBatchRunner:
                 raise ValueError(
                     "Current model does not match the model recorded by the resumed run"
                 )
+            if metadata.get("temperature", 0.0) != self.temperature:
+                raise ValueError(
+                    "Current temperature does not match the resumed run"
+                )
+            if metadata.get("thinking_mode") != self.thinking_mode:
+                raise ValueError(
+                    "Current thinking mode does not match the resumed run"
+                )
             return
         (self.run_dir / "cases").mkdir(parents=True, exist_ok=False)
         (self.run_dir / "artifacts").mkdir()
@@ -463,6 +479,8 @@ class SWEBenchBatchRunner:
                 "schema_version": 1,
                 "run_id": self.run_id,
                 "model": self.model_name,
+                "temperature": self.temperature,
+                "thinking_mode": self.thinking_mode,
                 "created_at": datetime.now(timezone.utc).isoformat(),
             },
         )
@@ -570,7 +588,7 @@ def run_official_evaluation(
     if not official_harness_available():
         error = (
             "Official SWE-bench harness is unavailable. Re-run this stage with "
-            "`uv run --with swebench python -m "
+            "`uv run --with swebench==4.1.0 python -m "
             "patchpilot.evaluate_swebench_batch ... --stage official`."
         )
         log_path.write_text(error + "\n", encoding="utf-8")

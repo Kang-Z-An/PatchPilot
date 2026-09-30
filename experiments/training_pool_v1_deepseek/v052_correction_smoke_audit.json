@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "scope": "one preassigned train correction smoke test; not a nine-case result",
+  "instance_id": "pydicom__pydicom-800",
+  "original_run_id": "v051-train-half1-public-tests-r1",
+  "original_official_status": "unresolved",
+  "chosen_run_id": "v052-correction-pydicom800-nonthink-t03-r1",
+  "generation": {
+    "model_request_name": "deepseek-v4-flash",
+    "thinking_mode": "disabled",
+    "temperature": 0.3,
+    "steps": 8,
+    "patch_generated": true,
+    "agent_verified": true,
+    "invalid_actions": 0,
+    "tool_failures": 0,
+    "test_files_modified": 0,
+    "tests_run_after_latest_edit": true,
+    "manifest_snapshot_sha256": "6766f6ae81d02b6abdbaa430f8658fc519892836c9823d8bbb86e5dee64f8cfe",
+    "predictions_sha256": "25547ae8919e28990416fb69e5f9fe5c5d2ad907a70bfa081d6ae7140ab4d13c",
+    "patch_sha256": "7022d7d24f04a140ee608c0a8dbae457913a8a3d7a4901d631a7992c752b23d6"
+  },
+  "official": {
+    "harness_version": "4.1.0",
+    "dataset": "princeton-nlp/SWE-bench",
+    "split": "dev",
+    "status": "completed",
+    "resolved": 1,
+    "unresolved": 0,
+    "errors": 0,
+    "report_sha256": "2909f407e8487a2805051e7bd8ae8ffe22e71ac9abc27b9c6c46b60440440100"
+  },
+  "exports": {
+    "strict_sft_new_sample_count": 1,
+    "same_task_same_prompt_preference_pairs": 1,
+    "preference_train_sha256": "bcb0fa625070cd4c48faa0e13487f1a7461562d8998bad36ead7960f78ed3416",
+    "combined_strict_sft_samples": 8,
+    "combined_strict_sft_sha256": "d57d15fc2d2ee156657891844d794b09cf0002fa3123d561c15d02fc81323e9c",
+    "combined_tokenized_report": "v052_sft_tokenized_dataset_audit.json"
+  },
+  "exploratory_runs_not_exported": [
+    {
+      "run_id": "v052-correction-pydicom800-t07-r1",
+      "official_status": "resolved",
+      "invalid_actions": 5,
+      "strict_quality_accepted": false
+    },
+    {
+      "run_id": "v052-correction-pydicom800-t02-r1",
+      "official_status": "not_run",
+      "invalid_actions": 3,
+      "strict_quality_accepted": false
+    },
+    {
+      "run_id": "v052-correction-pydicom800-t00-r1",
+      "official_status": "not_run",
+      "invalid_actions": 4,
+      "strict_quality_accepted": false
+    }
+  ],
+  "limitations": [
+    "The other eight unresolved train cases have not yet been corrected.",
+    "The provider-side model revision is not pinned by the request model name.",
+    "One corrected train case is not evidence of post-training improvement."
+  ]
+}

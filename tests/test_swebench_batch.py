@@ -83,6 +83,31 @@ class SWEBenchBatchTest(unittest.TestCase):
         self.assertIn("uv run --with swebench", stderr.getvalue())
         load_model_config.assert_not_called()
 
+    def test_cli_rejects_incompatible_harness_before_paid_generation(self) -> None:
+        stderr = io.StringIO()
+        with (
+            patch(
+                "patchpilot.evaluate_swebench_batch.load_batch_manifest",
+                return_value=[],
+            ),
+            patch(
+                "patchpilot.evaluate_swebench_batch.official_harness_available",
+                return_value=True,
+            ),
+            patch(
+                "patchpilot.evaluate_swebench_batch.metadata.version",
+                return_value="5.0.2",
+            ),
+            patch("patchpilot.evaluate_swebench_batch.load_model_config") as load_model_config,
+            redirect_stderr(stderr),
+            self.assertRaises(SystemExit) as raised,
+        ):
+            batch_main(["--manifest", "unused.jsonl", "--stage", "all"])
+
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("swebench==4.1.0", stderr.getvalue())
+        load_model_config.assert_not_called()
+
     def test_manifest_rejects_duplicate_ids_and_skips_disabled_cases(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -168,6 +193,28 @@ class SWEBenchBatchTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "does not match"):
                 wrong_model.generate(resume=True)
 
+            wrong_temperature = SWEBenchBatchRunner(
+                model=NeverCalledModel(),
+                model_name="scripted-model",
+                cases=cases,
+                results_dir=root / "results",
+                run_dir=run_dir,
+                temperature=0.7,
+            )
+            with self.assertRaisesRegex(ValueError, "temperature does not match"):
+                wrong_temperature.generate(resume=True)
+
+            wrong_thinking = SWEBenchBatchRunner(
+                model=NeverCalledModel(),
+                model_name="scripted-model",
+                cases=cases,
+                results_dir=root / "results",
+                run_dir=run_dir,
+                thinking_mode="disabled",
+            )
+            with self.assertRaisesRegex(ValueError, "thinking mode does not match"):
+                wrong_thinking.generate(resume=True)
+
             Path(case_result["predictions_path"]).unlink()
             recovered = SWEBenchBatchRunner(
                 model=ScriptedModel(),
@@ -221,6 +268,7 @@ class SWEBenchBatchTest(unittest.TestCase):
             runner.generate()
 
             def fake_run(command, **kwargs):
+                self.assertEqual(command[command.index("--namespace") + 1], "")
                 cwd = Path(kwargs["cwd"])
                 run_id = command[command.index("--run_id") + 1]
                 report = {
