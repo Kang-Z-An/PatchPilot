@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "run_id": "v052-correction-remaining8-nonthink-t03-r1",
+  "scope": "eight remaining preassigned train correction tasks, separate from the first accepted smoke correction",
+  "model_request_name": "deepseek-v4-flash",
+  "thinking_mode": "disabled",
+  "temperature": 0.3,
+  "manifest_sha256": "28fb745747ea516f5f7e87a5e3e41129f0ba856170a7e02d04ac0a0c35c62a85",
+  "predictions_sha256": "19dadc4c427915536b9b07dfc44a50835a75fafa0ed8c22ec2a92a44d305852d",
+  "generation": {
+    "total": 8,
+    "completed": 8,
+    "errors": 0,
+    "patch_generated": 7,
+    "agent_verified": 6,
+    "invalid_actions": 18,
+    "tool_failures": 22,
+    "test_files_modified": 0
+  },
+  "official": {
+    "harness_version": "4.1.0",
+    "dataset": "princeton-nlp/SWE-bench",
+    "split": "dev",
+    "status": "completed",
+    "resolved": 0,
+    "unresolved": 8,
+    "errors": 0,
+    "empty_patches": 1,
+    "report_sha256": "81f1975e7ea7e9405b67a6d4a98675f6adf2bb597a82d4f67966fad6ae466b39",
+    "seven_nonempty_patches_failed_issue_target_tests": true,
+    "analysis_sha256": "9e12f971b8eb6828e84a1de7a601d4eed2a9b89a03dc0a8568fcff13242baf4d"
+  },
+  "strict_sft_export": {
+    "accepted_samples": 0,
+    "rejected_samples": 8,
+    "rejection_reasons": {
+      "not_verified": 2,
+      "official_unresolved": 1,
+      "too_many_invalid_actions": 5
+    },
+    "report_sha256": "87803917d54ff3c285d4619241e301f12c923aea99905ae94ad38b8b76a7246c"
+  },
+  "cases": [
+    {"instance_id": "pydicom__pydicom-816", "official_status": "unresolved", "agent_verified": true, "invalid_actions": 0, "target_tests_passed": 0, "target_tests_total": 3},
+    {"instance_id": "pydicom__pydicom-901", "official_status": "unresolved", "agent_verified": true, "invalid_actions": 2, "target_tests_passed": 0, "target_tests_total": 5},
+    {"instance_id": "pylint-dev__astroid-1978", "official_status": "unresolved", "agent_verified": true, "invalid_actions": 2, "target_tests_passed": 0, "target_tests_total": 1},
+    {"instance_id": "pylint-dev__astroid-2307", "official_status": "unresolved", "agent_verified": true, "invalid_actions": 1, "target_tests_passed": 0, "target_tests_total": 1},
+    {"instance_id": "pylint-dev__astroid-927", "official_status": "unresolved", "agent_verified": false, "invalid_actions": 6, "target_tests_passed": 1, "target_tests_total": 3},
+    {"instance_id": "sqlfluff__sqlfluff-1517", "official_status": "empty_patch", "agent_verified": false, "invalid_actions": 5, "target_tests_passed": null, "target_tests_total": null},
+    {"instance_id": "sqlfluff__sqlfluff-2625", "official_status": "unresolved", "agent_verified": true, "invalid_actions": 1, "target_tests_passed": 0, "target_tests_total": 5},
+    {"instance_id": "sqlfluff__sqlfluff-4041", "official_status": "unresolved", "agent_verified": true, "invalid_actions": 1, "target_tests_passed": 0, "target_tests_total": 1}
+  ],
+  "conclusion": "No new eligible SFT or preference chosen trajectories; the previously accepted eight-sample train set remains unchanged.",
+  "limitations": [
+    "A single sampled correction per task does not estimate a best-of-N capability.",
+    "Agent-side verification is not an official task-resolution signal.",
+    "Provider-side model revision is not pinned by the request name."
+  ]
+}

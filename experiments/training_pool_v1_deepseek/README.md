@@ -39,6 +39,8 @@ tokenized rows themselves remain ignored under `.patchpilot/`.
 The first corrected train case and its updated eight-sample SFT export are
 recorded in [`v052_correction_smoke_audit.json`](v052_correction_smoke_audit.json)
 and [`v052_sft_tokenized_dataset_audit.json`](v052_sft_tokenized_dataset_audit.json).
+The subsequent eight-case correction batch and its negative official result
+are recorded in [`v052_remaining8_correction_audit.json`](v052_remaining8_correction_audit.json).
 
 ## SFT token audit
 
@@ -110,6 +112,24 @@ uv run --with 'swebench==4.1.0' python -m patchpilot.evaluate_swebench_batch \
 The pinned harness matters: the later PyPI `swebench` 5.0.2 CLI and input
 schema are incompatible with this evaluator. PatchPilot now rejects that
 version before a combined generate-and-grade stage can make paid model calls.
+
+## Remaining eight corrections
+
+The remaining-eight manifest is an exact partition of the original frozen
+nine-case correction manifest, excluding only the already resolved smoke case.
+With the same non-thinking request and temperature 0.3, the batch generated
+seven patches and Agent-verified six, but official SWE-bench resolution was
+**0/8**, with zero environment errors and one empty patch. All seven nonempty
+patches failed issue-specific target tests; one also failed a public regression
+test. The strict exporter accepted **0/8** new SFT samples, so the combined
+eight-sample corpus and one valid preference pair remain unchanged.
+
+Five trajectories exceeded the zero-invalid-action gate, two were not
+Agent-verified, and the remaining clean trajectory was officially unresolved.
+This is evidence against blindly repeating the same setting, not proof that
+the tasks are unsolvable. The next experiment should inspect semantic failure
+and verification quality on train cases while keeping official target tests
+outside the Agent's tool context.
 
 ## Interpretation
 

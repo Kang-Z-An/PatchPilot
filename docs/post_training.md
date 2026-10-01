@@ -121,8 +121,11 @@ The first correction smoke test has now resolved `pydicom__pydicom-800` under
 the pinned official harness, with zero invalid actions. Its original unresolved
 and new resolved trajectories pass the exact-prompt preference pairing gate.
 Combining the accepted correction with the unchanged original baseline gives
-eight strict train SFT samples; the other eight correction tasks remain open.
-See `experiments/training_pool_v1_deepseek/v052_correction_smoke_audit.json`.
+eight strict train SFT samples. A first correction attempt on the other eight
+tasks generated seven patches, but official grading resolved 0/8 with zero
+environment errors; strict SFT export accepted none. Those tasks remain open,
+and the eight-sample corpus is unchanged. See the correction smoke and
+remaining-eight audits in `experiments/training_pool_v1_deepseek/`.
 
 Reproduce the two audits:
 

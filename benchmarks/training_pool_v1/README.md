@@ -40,6 +40,11 @@ Use the manifests for their named purpose:
   filtering;
 - `manifest_train_corrections.jsonl`: rerun only the nine officially unresolved
   train tasks when collecting corrected trajectories for preference pairs;
+- `manifest_train_correction_smoke.jsonl` and
+  `manifest_train_corrections_remaining8.jsonl`: an exact, task-disjoint
+  partition of those nine for the first correction experiment. The smoke case
+  resolved; the first remaining-eight batch resolved 0/8, so those eight are
+  still open. See `experiments/training_pool_v1_deepseek/` for the audits;
 - `manifest_dev.jsonl`: choose checkpoints and training settings, never feed
   its model outputs into training;
 - `manifest_test.jsonl`: run only for frozen pre/post-training comparison.
