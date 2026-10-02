@@ -8,14 +8,28 @@ version = "0.5.2"
 description = "A minimal, traceable code-repair agent"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = { file = "LICENSE" }
 authors = [{ name = "PatchPilot contributors" }]
+keywords = ["code-repair", "agents", "swe-bench", "evaluation", "post-training"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Testing",
+]
 dependencies = [
     "python-dotenv>=1.0,<2",
 ]
 
 [project.scripts]
 patchpilot = "patchpilot.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Kang-Z-An/PatchPilot"
+Repository = "https://github.com/Kang-Z-An/PatchPilot"
+Issues = "https://github.com/Kang-Z-An/PatchPilot/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/patchpilot"]

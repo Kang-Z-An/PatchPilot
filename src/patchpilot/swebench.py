@@ -3,14 +3,15 @@ from __future__ import annotations
 import json
 import re
 import subprocess
-from dataclasses import asdict, dataclass
+from functools import partial
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 from .agent import Agent
-from .docker import DockerTestRunner
+from .docker import DockerTestRunner, DualCheckoutProbeRunner
 from .tools import RepositoryTools
 from .types import Model
 
@@ -64,6 +65,9 @@ class SWEBenchRunResult:
     predictions_path: str
     metadata_path: str
     metrics: dict[str, int | float | bool]
+    prompt_variant: str = "default"
+    baseline_repository_path: str | None = None
+    baseline_commit: str | None = None
 
 
 def load_instance(path: Path, instance_id: str | None = None) -> SWEBenchInstance:
@@ -217,7 +221,10 @@ class SWEBenchRunner:
         docker_memory: str = "4g",
         docker_pids_limit: int = 512,
         protect_test_files: bool = True,
+        prompt_variant: str = "default",
     ) -> None:
+        if prompt_variant in {"red-green-probe-v1", "dual-checkout-probe-v1"} and docker_image is None:
+            raise ValueError(f"{prompt_variant} requires a Docker image")
         self.model = model
         self.model_name = model_name
         self.results_dir = results_dir.resolve()
@@ -230,6 +237,7 @@ class SWEBenchRunner:
         self.docker_memory = docker_memory
         self.docker_pids_limit = docker_pids_limit
         self.protect_test_files = protect_test_files
+        self.prompt_variant = prompt_variant
 
     def run(
         self,
@@ -263,11 +271,34 @@ class SWEBenchRunner:
                 memory=self.docker_memory,
                 pids_limit=self.docker_pids_limit,
             )
+        probe_runner = None
+        paired_probe_runner = None
+        baseline_repo = None
+        baseline_commit = None
+        if docker_runner is not None:
+            if self.prompt_variant == "red-green-probe-v1":
+                probe_runner = partial(
+                    docker_runner.run_probe, classify_assertions=True
+                )
+            elif self.prompt_variant == "behavior-probe-v1":
+                probe_runner = docker_runner.run_probe
+            elif self.prompt_variant == "dual-checkout-probe-v1":
+                baseline_repo = prepare_repository(instance, run_dir / "baseline", repo)
+                baseline_commit = subprocess.run(
+                    ["git", "rev-parse", "HEAD"], cwd=baseline_repo,
+                    capture_output=True, text=True, check=True, timeout=10,
+                ).stdout.strip()
+                paired_probe_runner = DualCheckoutProbeRunner(
+                    replace(docker_runner, repository=baseline_repo),
+                    docker_runner, baseline_commit,
+                ).run
         tools = RepositoryTools(
             repo,
             self.test_command,
             self.timeout_seconds,
             test_runner=docker_runner.run if docker_runner is not None else None,
+            probe_runner=probe_runner,
+            paired_probe_runner=paired_probe_runner,
             protect_test_files=self.protect_test_files,
         )
         agent_result = Agent(
@@ -280,6 +311,7 @@ class SWEBenchRunner:
                 "source": "swebench",
                 "model": self.model_name,
             },
+            prompt_variant=self.prompt_variant,
         ).run(instance.problem_statement)
 
         patch = collect_git_diff(repo)
@@ -310,6 +342,9 @@ class SWEBenchRunner:
             predictions_path=str(predictions_path),
             metadata_path=str(metadata_path),
             metrics=agent_result.metrics.as_dict(),
+            prompt_variant=self.prompt_variant,
+            baseline_repository_path=str(baseline_repo) if baseline_repo is not None else None,
+            baseline_commit=baseline_commit,
         )
         metadata_path.write_text(
             json.dumps(asdict(result), ensure_ascii=False, indent=2) + "\n",

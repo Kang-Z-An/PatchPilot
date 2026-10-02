@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "run_id": "v053-behavior-contract-smoke-r1",
+  "scope": "two preselected train failures; prompt-only development smoke test, not a held-out score",
+  "manifest": "benchmarks/training_pool_v1/manifest_train_behavior_contract_smoke.jsonl",
+  "manifest_sha256": "cdbe822561a1cb2d4aafdf49f1e4d6d216838b0cb49a789b38e17e6306c2fce6",
+  "model_request_name": "deepseek-v4-flash",
+  "thinking_mode": "disabled",
+  "temperature": 0.3,
+  "prompt_variant": "behavior-contract-v1",
+  "baseline_run_id": "v052-correction-remaining8-nonthink-t03-r1",
+  "predictions_sha256": "8a04c033abf62463df55f6cde36160a55ec2435f8fcea62f42ca51836529b638",
+  "generation": {
+    "completed": 2,
+    "errors": 0,
+    "patch_generated": 2,
+    "agent_verified": 2,
+    "invalid_actions": 2,
+    "tool_failures": 6,
+    "average_steps": 22.0,
+    "average_duration_seconds": 32.097
+  },
+  "official": {
+    "harness_version": "4.1.0",
+    "dataset": "princeton-nlp/SWE-bench",
+    "split": "dev",
+    "resolved": 0,
+    "unresolved": 2,
+    "errors": 0,
+    "empty_patches": 0,
+    "report_sha256": "9e1a8c85803d915496f3f811f838532e7f2fd04eab773803c0cbced4c262e09e"
+  },
+  "cases": [
+    {
+      "instance_id": "pydicom__pydicom-816",
+      "baseline_official": "unresolved",
+      "new_official": "unresolved",
+      "target_tests_passed": 0,
+      "target_tests_total": 3,
+      "observed_failure": "The proposed charset fallback still leaves all three issue-target tests failing."
+    },
+    {
+      "instance_id": "sqlfluff__sqlfluff-4041",
+      "baseline_official": "unresolved",
+      "new_official": "unresolved",
+      "target_tests_passed": 0,
+      "target_tests_total": 1,
+      "observed_failure": "The patch deduplicates CLI display, but the target linter-result behavior still fails."
+    }
+  ],
+  "conclusion": "No official-resolution improvement; zero new examples qualify for strict SFT or same-prompt preference export. The original eight-sample strict train corpus remains unchanged.",
+  "limitations": [
+    "One stochastic sample per task is insufficient for a causal prompt comparison.",
+    "Provider-side model revision is not pinned by the request name.",
+    "The new system prompt differs from the baseline, so even a future resolved rollout under this variant cannot form an exact-prompt preference pair with the old trajectory.",
+    "Official target tests were used only after generation and were not exposed to the Agent."
+  ]
+}

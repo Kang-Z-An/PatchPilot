@@ -7,9 +7,35 @@ import unittest
 from pathlib import Path
 
 from patchpilot.tools import RepositoryTools, is_test_file_path
+from patchpilot.types import ToolResult
 
 
 class RepositoryToolsTest(unittest.TestCase):
+    def test_paired_probe_is_only_exposed_with_baseline_runner(self) -> None:
+        self.assertNotIn("run_probe_pair", self.tools.prompt_description())
+        self.assertFalse(self.tools.execute("run_probe_pair", {"code": "assert True"}).ok)
+        tools = RepositoryTools(self.root, "unused", paired_probe_runner=lambda code: ToolResult(True, code))
+        self.assertIn("run_probe_pair", tools.prompt_description())
+        for arguments in ({}, {"code": 3}, {"code": "assert True", "path": "outside"}):
+            self.assertFalse(tools.execute("run_probe_pair", arguments).ok)
+        self.assertTrue(tools.execute("run_probe_pair", {"code": "assert True"}).ok)
+
+    def test_probe_is_opt_in_and_does_not_replace_fixed_tests(self) -> None:
+        self.assertNotIn("run_probe", self.tools.prompt_description())
+        self.assertFalse(self.tools.execute("run_probe", {"code": "assert True"}).ok)
+        probes: list[str] = []
+        tools = RepositoryTools(
+            self.root,
+            "python -m unittest -q",
+            probe_runner=lambda code: (
+                probes.append(code) or ToolResult(True, "Probe assertions passed")
+            ),
+        )
+        self.assertIn("run_probe", tools.prompt_description())
+        self.assertFalse(tools.execute("run_probe", {}).ok)
+        self.assertTrue(tools.execute("run_probe", {"code": "assert True"}).ok)
+        self.assertEqual(probes, ["assert True"])
+
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)

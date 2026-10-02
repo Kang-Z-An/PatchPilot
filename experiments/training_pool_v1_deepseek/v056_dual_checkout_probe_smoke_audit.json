@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "run_id": "v056-dual-checkout-probe-smoke-r1",
+  "scope": "same two preselected SWE-bench train failures; opt-in dual-checkout assertion experiment",
+  "manifest": "benchmarks/training_pool_v1/manifest_train_behavior_contract_smoke.jsonl",
+  "manifest_sha256": "cdbe822561a1cb2d4aafdf49f1e4d6d216838b0cb49a789b38e17e6306c2fce6",
+  "model_request_name": "deepseek-v4-flash",
+  "thinking_mode": "disabled",
+  "temperature": 0.3,
+  "prompt_variant": "dual-checkout-probe-v1",
+  "predictions_sha256": "e29f873e99bd7009ece0b8e7f1f89e760794bd7c29367c46e43a5b30d6b88eaa",
+  "generation": {
+    "completed": 2,
+    "errors": 0,
+    "patch_generated": 2,
+    "agent_verified": 1,
+    "paired_probe_attempts": 6,
+    "paired_probe_successes": 5,
+    "invalid_actions": 2,
+    "tool_failures": 11,
+    "protected_edit_attempts": 1,
+    "test_files_modified": 0,
+    "average_steps": 30.0,
+    "average_duration_seconds": 44.829
+  },
+  "baseline_integrity": {
+    "separate_checkout_outside_agent_repository": true,
+    "both_clean_after_generation_and_official_grading": true,
+    "head_matches_base_commit": true,
+    "probe_mounts": "read-only, offline, same image and platform as candidate",
+    "checks": "HEAD and git status including untracked and ignored files before and after each pair"
+  },
+  "official": {
+    "harness_version": "4.1.0",
+    "dataset": "princeton-nlp/SWE-bench",
+    "split": "dev",
+    "resolved": 1,
+    "unresolved": 1,
+    "errors": 0,
+    "empty_patches": 0,
+    "report_sha256": "1a9ea9c769290f7a8c80241e8a0f61ba2fc309cfbde274ecf48c79dd60d5342b"
+  },
+  "cases": [
+    {
+      "instance_id": "pydicom__pydicom-816",
+      "base_commit": "3551f5b5a5f8d4de3ed92e5e479ac8c74a8c893a",
+      "first_edit_step": 10,
+      "first_paired_probe_step": 12,
+      "paired_probe_attempts": 3,
+      "paired_probe_successes": 3,
+      "fresh_pair_after_latest_edit": true,
+      "agent_verified": true,
+      "invalid_actions": 2,
+      "official_status": "unresolved",
+      "target_tests_passed": 0,
+      "target_tests_total": 3,
+      "official_regressions_passed": 36,
+      "official_regressions_total": 36,
+      "public_regressions_last_run": "47 passed",
+      "observation": "A probe created after editing got a genuine base-fail/current-pass result. The narrow Not Supplied fallback and an invalid-encoding compatibility check passed, but all three official target tests failed."
+    },
+    {
+      "instance_id": "sqlfluff__sqlfluff-4041",
+      "base_commit": "66fd602d0824138f212082c8fdf381266a9edad3",
+      "first_edit_step": 10,
+      "first_paired_probe_step": 11,
+      "paired_probe_attempts": 3,
+      "paired_probe_successes": 2,
+      "fresh_pair_after_latest_edit": true,
+      "agent_verified": false,
+      "invalid_actions": 0,
+      "official_status": "resolved",
+      "target_tests_passed": 1,
+      "target_tests_total": 1,
+      "official_regressions_passed": 86,
+      "official_regressions_total": 86,
+      "public_regressions_last_run": "90 passed, 1 failed",
+      "observation": "The first pair correctly rejected original-fail/current-fail. Later deduplication in the internal linter produced red-green evidence and passed official grading, but the base-checkout public test expected duplicate violations. That local failure persisted, a test-edit attempt was blocked, and the Agent exhausted 30 turns without full verification. The local/official test-oracle mismatch needs a separate audit before any gate change."
+    }
+  ],
+  "strict_sft_export": {
+    "accepted_samples": 0,
+    "rejected_samples": 2,
+    "rejection_reasons": {
+      "not_verified": 1,
+      "too_many_invalid_actions": 1
+    },
+    "report_sha256": "a84ff8097d1f84dcad09c9e23b3b35f7d01e16f65f8adedf1868c3f4d4c6e690",
+    "note": "Exporter reports the first failing gate only; pydicom is also officially unresolved. The existing eight-sample accepted corpus was not changed."
+  },
+  "verification": {
+    "local_unit_tests": 102,
+    "local_unit_test_failures": 0,
+    "docker_preflight_ready": 2,
+    "docker_preflight_errors": 0
+  },
+  "conclusion": "Dual checkouts remove the requirement to run a probe before editing while preserving an auditable same-code counterfactual. They do not solve narrow assertion coverage, invalid JSON, or conflicts between base-checkout tests and official grading. No new strict training sample was accepted.",
+  "limitations": [
+    "One stochastic sample per task and an unpinned provider revision do not establish causal improvement over prior variants.",
+    "A passing pair proves only the model-written assertion, not complete issue resolution.",
+    "The model never received official test patches, target test identities, or gold patches; report analysis was post-hoc.",
+    "Changed initial prompts cannot form exact-prompt preference pairs with older trajectories.",
+    "No held-out rollout, GPU job, SFT, LoRA, or RL training was performed."
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "run_id": "v054-behavior-probe-smoke-r1",
+  "scope": "same two train failures as v053; optional Docker issue-probe tool development smoke",
+  "manifest": "benchmarks/training_pool_v1/manifest_train_behavior_contract_smoke.jsonl",
+  "model_request_name": "deepseek-v4-flash",
+  "thinking_mode": "disabled",
+  "temperature": 0.3,
+  "prompt_variant": "behavior-probe-v1",
+  "predictions_sha256": "e5785dc5a48f2586913b9d500bda9a9af140a195bdc79728205c7a340b797510",
+  "generation": {
+    "completed": 2,
+    "errors": 0,
+    "patch_generated": 2,
+    "agent_verified": 1,
+    "invalid_actions": 5,
+    "tool_failures": 5,
+    "probe_attempts": 2,
+    "probe_successes": 2,
+    "probe_cases": 1,
+    "average_steps": 25.5,
+    "average_duration_seconds": 37.534
+  },
+  "official": {
+    "harness_version": "4.1.0",
+    "dataset": "princeton-nlp/SWE-bench",
+    "split": "dev",
+    "resolved": 0,
+    "unresolved": 2,
+    "errors": 0,
+    "empty_patches": 0,
+    "report_sha256": "9e1a8c85803d915496f3f811f838532e7f2fd04eab773803c0cbced4c262e09e"
+  },
+  "cases": [
+    {
+      "instance_id": "pydicom__pydicom-816",
+      "probe_attempts": 2,
+      "probe_successes": 2,
+      "agent_verified": true,
+      "official_status": "unresolved",
+      "target_tests_passed": 0,
+      "target_tests_total": 3,
+      "observation": "The Agent asserted selected convert_encodings outputs after editing, but all three official issue-target tests still failed."
+    },
+    {
+      "instance_id": "sqlfluff__sqlfluff-4041",
+      "probe_attempts": 0,
+      "agent_verified": false,
+      "official_status": "unresolved",
+      "target_tests_passed": 0,
+      "target_tests_total": 1,
+      "public_regressions_failed": 1,
+      "observation": "The Agent did not use the probe and its edited code failed the fixed public regression command."
+    }
+  ],
+  "security_smoke": {
+    "both_images_execute_read_only_import_probes": true,
+    "attempted_repository_write_rejected": true,
+    "host_checkout_unchanged_by_write_attempt": true
+  },
+  "conclusion": "The tool adds auditable issue-specific observations but did not improve official resolution on these two train cases. No new strict SFT or preference example was exported.",
+  "limitations": [
+    "A model-written assertion can be too narrow or encode a wrong expected result; passing it is not task resolution.",
+    "One stochastic attempt per case and an unpinned provider revision do not support a causal comparison.",
+    "The changed system prompt cannot form an exact-prompt preference pair with earlier runs.",
+    "Official target tests were not exposed to the Agent during generation."
+  ]
+}

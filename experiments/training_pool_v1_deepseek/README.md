@@ -131,6 +131,121 @@ the tasks are unsolvable. The next experiment should inspect semantic failure
 and verification quality on train cases while keeping official target tests
 outside the Agent's tool context.
 
+## Behavior-contract prompt smoke
+
+`manifest_train_behavior_contract_smoke.jsonl` selects two unresolved train
+cases, `pydicom__pydicom-816` and `sqlfluff__sqlfluff-4041`. The opt-in
+`--prompt-variant behavior-contract-v1` asks the Agent to identify the issue's
+observable behavior, edge cases, and owning layer before editing. The default
+prompt is unchanged; the variant is recorded in the batch metadata and
+trajectory, and a resumed generation rejects a mismatched variant.
+
+With the same requested model, non-thinking mode, and temperature 0.3 as the
+earlier correction run, both generated patches were Agent-verified but official
+SWE-bench grading resolved **0/2**, with no harness errors. The pydicom patch
+failed all three issue-target tests; the SQLFluff patch changed CLI display
+while the issue-target linter test still failed. This is a negative development
+result, not a model improvement; one sample per task and an unpinned provider
+revision do not support a causal speed or capability claim. No new training
+example was exported. See `v053_behavior_contract_smoke_audit.json`.
+
+Reproduce with a new run ID, then grade with the pinned harness:
+
+```bash
+uv run python -m patchpilot.evaluate_swebench_batch \
+  --manifest benchmarks/training_pool_v1/manifest_train_behavior_contract_smoke.jsonl \
+  --stage generate --thinking-mode disabled --temperature 0.3 \
+  --prompt-variant behavior-contract-v1 --run-id <new-run-id>
+uv run --with 'swebench==4.1.0' python -m patchpilot.evaluate_swebench_batch \
+  --manifest benchmarks/training_pool_v1/manifest_train_behavior_contract_smoke.jsonl \
+  --stage official --run-dir .patchpilot/swebench/batch/<new-run-id> \
+  --dataset-name princeton-nlp/SWE-bench --split dev --max-workers 1
+```
+
+## Read-only issue-probe smoke
+
+`--prompt-variant behavior-probe-v1` adds an opt-in `run_probe` action to the
+same two-case train manifest. The model can execute a short Python assertion
+inside the existing instance image, with no network and a read-only `/testbed`
+mount. This does not change the fixed `run_tests` command, final diff gate, or
+official evaluator. The previous prompt variants retain their original tool
+lists and wording. Unit tests and an actual Docker write-attempt smoke verified
+that the probe cannot create a file in the mounted checkout.
+
+The Agent used two passing probes on pydicom, but official grading still failed
+all three target tests. It did not probe SQLFluff; that patch failed its public
+regression command and the one official target test. Official resolution was
+**0/2**, with zero harness errors. A model-written assertion can validate the
+wrong or an incomplete behavioral claim, so this run establishes tool
+feasibility, not a performance gain. No new SFT or preference sample was added.
+The detailed record is `v054_behavior_probe_smoke_audit.json`.
+
+To repeat with a new run ID, use the two commands above but change the prompt
+variant to `behavior-probe-v1`.
+
+## Same-assertion red-green probe smoke
+
+`--prompt-variant red-green-probe-v1` adds a strict probe protocol without
+changing earlier variants: only an actual pre-edit Python assertion failure
+counts as red, the first red code is frozen, and post-edit probes with changed
+code are rejected. Agent verification requires the exact assertion to pass
+after the latest edit, plus the existing fixed tests and diff. Docker
+classification distinguishes assertion failures from import/runtime errors.
+
+On the same two train cases, pydicom recorded a same-code red-green sequence
+and passed its public regression file, yet failed all three official target
+tests. Its assertion covered only one `convert_encodings` output. SQLFluff's
+patch passed the official target test and all 86 pass-to-pass tests, but the
+Agent had edited before its first probe and therefore did not satisfy the
+opt-in red-green quality gate. The official result was **1/2** (zero harness
+errors), while strict SFT export accepted **0/2**: one `official_unresolved`
+and one `not_verified`. The accepted eight-sample train corpus remains
+unchanged. This single stochastic run with an unpinned provider revision is
+not evidence that the new protocol caused a capability gain. See
+`v055_red_green_probe_smoke_audit.json`.
+
+To reproduce, use the same two-case commands above with
+`--prompt-variant red-green-probe-v1` and a fresh run ID.
+
+## Dual-checkout probe smoke
+
+`--prompt-variant dual-checkout-probe-v1` exposes `run_probe_pair` rather than
+requiring a pre-edit probe. A clean, independent base-commit checkout lives
+outside the Agent editing scope. Identical code runs on original and current
+checkouts with read-only mounts, offline networking, and bounded resources.
+Only original assertion failure/current success with an unchanged clean base
+qualifies. Further successful edits invalidate the evidence. Fixed tests and
+diff inspection remain mandatory.
+
+The same two train cases both obtained paired evidence after editing, and both
+baseline checkouts remained clean. There were 6 pair attempts and 5 successes.
+Official resolution was **1/2**, with zero harness errors; this is not evidence
+of a causal gain. Pydicom still failed all 3 target tests and emitted 2 invalid
+actions. SQLFluff was officially resolved, but a public regression in the base
+checkout expected duplicate violations and failed after deduplication. It also
+attempted a protected test edit (blocked) and exhausted the 30-turn budget.
+Strict SFT export accepted **0/2**, so the accepted corpus remains 8 samples.
+The exporter reports first-gate rejection reasons, not all disqualifications.
+See `v056_dual_checkout_probe_smoke_audit.json` for counts and artifact hashes.
+The next task is an evaluator consistency audit of local versus official test
+oracles; no gate was relaxed here.
+
+```bash
+uv run python -m patchpilot.evaluate_swebench_batch \
+  --manifest benchmarks/training_pool_v1/manifest_train_behavior_contract_smoke.jsonl \
+  --stage generate --thinking-mode disabled --temperature 0.3 \
+  --prompt-variant dual-checkout-probe-v1 --run-id <fresh-run-id>
+
+uv run --with 'swebench==4.1.0' python -m patchpilot.evaluate_swebench_batch \
+  --manifest benchmarks/training_pool_v1/manifest_train_behavior_contract_smoke.jsonl \
+  --stage official --run-dir .patchpilot/swebench/batch/<fresh-run-id> \
+  --dataset-name princeton-nlp/SWE-bench --split dev --max-workers 1
+
+uv run python -m patchpilot.export_training_data \
+  --input .patchpilot/swebench/batch/<fresh-run-id> \
+  --output-dir .patchpilot/training/<fresh-audit-dir>
+```
+
 ## Interpretation
 
 The primary gap is semantic verification. Public regression files showed that

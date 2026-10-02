@@ -46,6 +46,16 @@ class RepositoryTools:
         ),
         ToolSpec("apply_patch", "Apply one unified diff after validation.", '{"patch":"*** unified diff text ***"}'),
         ToolSpec("run_tests", "Run the human-configured test command.", "{}"),
+        ToolSpec(
+            "run_probe",
+            "Run a short Python assertion probe in an offline Docker container with a read-only repository. This is issue-specific evidence, not an official test.",
+            '{"code":"from package import function\\nassert function(...) == expected"}',
+        ),
+        ToolSpec(
+            "run_probe_pair",
+            "Run the same Python assertion on the original and current checkouts in isolated read-only containers. Success requires an original assertion failure and a current pass.",
+            '{"code":"from package import function\\nassert function(...) == expected"}',
+        ),
         ToolSpec("git_diff", "Show the current working-tree diff.", "{}"),
     )
 
@@ -56,6 +66,8 @@ class RepositoryTools:
         timeout_seconds: int = 120,
         test_runner: Callable[[], ToolResult] | None = None,
         protect_test_files: bool = False,
+        probe_runner: Callable[[str], ToolResult] | None = None,
+        paired_probe_runner: Callable[[str], ToolResult] | None = None,
     ) -> None:
         self.root = root.resolve()
         if not self.root.is_dir():
@@ -65,6 +77,8 @@ class RepositoryTools:
             raise ValueError("Test command cannot be empty")
         self.timeout_seconds = timeout_seconds
         self._test_runner = test_runner
+        self._probe_runner = probe_runner
+        self._paired_probe_runner = paired_probe_runner
         if not isinstance(protect_test_files, bool):
             raise ValueError("protect_test_files must be a boolean")
         self.protect_test_files = protect_test_files
@@ -79,11 +93,17 @@ class RepositoryTools:
             "run_tests": self.run_tests,
             "git_diff": self.git_diff,
         }
+        if probe_runner is not None:
+            self._handlers["run_probe"] = self.run_probe
+        if paired_probe_runner is not None:
+            self._handlers["run_probe_pair"] = self.run_probe_pair
 
     def prompt_description(self) -> str:
         description = "\n".join(
             f'- {spec.name}: {spec.description} Arguments: {spec.arguments}'
             for spec in self.SPECS
+            if spec.name != "run_probe" or self._probe_runner is not None
+            if spec.name != "run_probe_pair" or self._paired_probe_runner is not None
         )
         if self.protect_test_files:
             description += (
@@ -338,6 +358,20 @@ class RepositoryTools:
             return self._test_runner()
         result = self._run(self.test_command)
         return ToolResult(result.returncode == 0, self._format_process(result))
+
+    def run_probe(self, arguments: dict[str, Any]) -> ToolResult:
+        if self._probe_runner is None:
+            return ToolResult(False, "run_probe is available only in the Docker probe variant")
+        if set(arguments) != {"code"} or not isinstance(arguments["code"], str):
+            return ToolResult(False, "run_probe requires exactly one string code argument")
+        return self._probe_runner(arguments["code"])
+
+    def run_probe_pair(self, arguments: dict[str, Any]) -> ToolResult:
+        if self._paired_probe_runner is None:
+            return ToolResult(False, "run_probe_pair requires a separate baseline checkout")
+        if set(arguments) != {"code"} or not isinstance(arguments["code"], str):
+            return ToolResult(False, "run_probe_pair requires exactly one string code argument")
+        return self._paired_probe_runner(arguments["code"])
 
     def git_diff(self, arguments: dict[str, Any]) -> ToolResult:
         if arguments:

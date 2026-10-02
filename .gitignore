@@ -10,3 +10,16 @@ build/
 !.env.example
 benchmarks/results/
 logs/
+.DS_Store
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.pem
+*.key
+*.safetensors
+*.pt
+*.pth
+checkpoints/
+wandb/

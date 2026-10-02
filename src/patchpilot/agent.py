@@ -35,6 +35,25 @@ Available tools:
 __TOOLS__
 """
 
+PROMPT_VARIANTS = (
+    "default", "behavior-contract-v1", "behavior-probe-v1", "red-green-probe-v1",
+    "dual-checkout-probe-v1",
+)
+BEHAVIOR_CONTRACT_PROMPT = """
+Before editing, turn the issue into a short behavior contract in your own reasoning: identify the observable input, expected output, relevant edge cases, and the layer that owns the behavior. Distinguish the reported symptom from its likely cause; check callers and consumers before choosing an edit location. For each proposed fix, ask whether it covers all stated cases without changing unrelated behavior.
+
+Use a focused reproduction or existing test that exercises the issue when feasible, while respecting the edit deadline. After editing, run the available tests and inspect the diff. Passing a broad regression suite alone does not prove the issue is fixed: if you could not exercise the reported behavior directly, say so in the final response instead of claiming full verification.
+"""
+BEHAVIOR_PROBE_PROMPT = """
+When run_probe is available, use a small Python assert to check an observable behavior stated in the issue. Prefer running the same probe before and after the edit when the step budget allows. A passing probe is evidence only for its assertion; it cannot replace run_tests, git_diff, or official evaluation. Never claim broad resolution from a narrow probe.
+"""
+RED_GREEN_PROBE_PROMPT = """
+Before editing, use run_probe with a short assertion for a concrete behavior requested in the issue. The assertion must fail on the original checkout; an import error or other execution error does not count as a red probe. The first genuine failing assertion is frozen. After editing, rerun run_probe with exactly the same code so it can turn green; changed assertions will be rejected. Both red and green are required for Agent-side verification in this variant, along with run_tests and git_diff. A passing probe is still narrow evidence, not official task resolution.
+"""
+DUAL_CHECKOUT_PROBE_PROMPT = """
+Use run_probe_pair with a short Python assertion for an observable behavior requested in the issue. You may write the probe after editing: the tool automatically runs exactly the same code on a separate original base checkout and the current checkout. Success requires an assertion failure on the original and a pass on the current checkout; import errors and assertions that pass on both are not qualifying evidence. Inspect both outputs if it fails. After every successful edit, obtain a fresh passing pair, run_tests, and git_diff before finishing. These are all required for Agent-side verification. A passing pair proves only its assertion, not all issue edge cases or official task resolution.
+"""
+
 
 @dataclass(frozen=True)
 class AgentResult:
@@ -64,6 +83,16 @@ class AgentMetrics:
     empty_diff_attempts: int = 0
     test_files_modified: int = 0
     tests_run_after_latest_edit: bool = False
+    probe_attempts: int = 0
+    probe_successes: int = 0
+    probe_attempted_after_latest_edit: bool = False
+    probe_passed_after_latest_edit: bool = False
+    red_probe_recorded: bool = False
+    green_probe_passed: bool = False
+    probe_mismatch_attempts: int = 0
+    paired_probe_attempts: int = 0
+    paired_probe_successes: int = 0
+    paired_probe_passed_after_latest_edit: bool = False
 
     def as_dict(self) -> dict[str, int | float | bool]:
         return {
@@ -91,6 +120,17 @@ class AgentMetrics:
             "empty_diff_attempts": self.empty_diff_attempts,
             "test_files_modified": self.test_files_modified,
             "tests_run_after_latest_edit": self.tests_run_after_latest_edit,
+            "probe_attempts": self.probe_attempts,
+            "probe_successes": self.probe_successes,
+            "probe_attempted_after_latest_edit": self.probe_attempted_after_latest_edit,
+            "probe_passed_after_latest_edit": self.probe_passed_after_latest_edit,
+            "red_probe_recorded": self.red_probe_recorded,
+            "green_probe_passed": self.green_probe_passed,
+            "probe_mismatch_attempts": self.probe_mismatch_attempts,
+            "paired_probe_attempts": self.paired_probe_attempts,
+            "paired_probe_successes": self.paired_probe_successes,
+            "paired_probe_success_rate": self._rate(self.paired_probe_successes, self.paired_probe_attempts),
+            "paired_probe_passed_after_latest_edit": self.paired_probe_passed_after_latest_edit,
         }
 
     @staticmethod
@@ -106,23 +146,37 @@ class Agent:
         trajectory_dir: Path,
         max_steps: int = 20,
         trajectory_metadata: dict[str, str] | None = None,
+        prompt_variant: str = "default",
     ) -> None:
         if max_steps < 1:
             raise ValueError("max_steps must be positive")
+        if prompt_variant not in PROMPT_VARIANTS:
+            raise ValueError(f"Unknown prompt variant: {prompt_variant}")
         self.model = model
         self.tools = tools
         self.trajectory_dir = trajectory_dir
         self.tools.ignore_diff_path(trajectory_dir)
         self.max_steps = max_steps
         self.trajectory_metadata = dict(trajectory_metadata or {})
+        self.prompt_variant = prompt_variant
         self.edit_deadline = max(1, min(max_steps - 3, (max_steps * 3 + 4) // 5))
         self.max_inspection_streak = max(1, min(8, self.edit_deadline - 1))
 
     def run(self, issue: str) -> AgentResult:
+        system_prompt = SYSTEM_PROMPT
+        if self.prompt_variant != "default":
+            system_prompt = system_prompt.replace(
+                "Reply with exactly one JSON object and no Markdown.",
+                BEHAVIOR_CONTRACT_PROMPT
+                + (BEHAVIOR_PROBE_PROMPT if self.prompt_variant == "behavior-probe-v1" else "")
+                + (RED_GREEN_PROBE_PROMPT if self.prompt_variant == "red-green-probe-v1" else "")
+                + (DUAL_CHECKOUT_PROBE_PROMPT if self.prompt_variant == "dual-checkout-probe-v1" else "")
+                + "\nReply with exactly one JSON object and no Markdown.",
+            )
         messages = [
             {
                 "role": "system",
-                "content": SYSTEM_PROMPT.replace(
+                "content": system_prompt.replace(
                     "__TOOLS__", self.tools.prompt_description()
                 )
                 .replace("__MAX_STEPS__", str(self.max_steps))
@@ -154,6 +208,7 @@ class Agent:
                 "max_steps": self.max_steps,
                 "edit_deadline": self.edit_deadline,
                 "max_inspection_streak": self.max_inspection_streak,
+                "prompt_variant": self.prompt_variant,
                 "initial_messages": messages,
             },
         )
@@ -179,7 +234,20 @@ class Agent:
             "empty_diff_attempts": 0,
             "test_files_modified": 0,
             "tests_run_after_latest_edit": False,
+            "probe_attempts": 0,
+            "probe_successes": 0,
+            "probe_attempted_after_latest_edit": False,
+            "probe_passed_after_latest_edit": False,
+            "red_probe_recorded": False,
+            "green_probe_passed": False,
+            "probe_mismatch_attempts": 0,
+            "paired_probe_attempts": 0,
+            "paired_probe_successes": 0,
+            "paired_probe_passed_after_latest_edit": False,
         }
+        red_probe_code: str | None = None
+        red_probe_sha256: str | None = None
+        paired_probe_sha256: str | None = None
         consecutive_inspections = 0
         for step in range(1, self.max_steps + 1):
             raw = self.model.complete(messages)
@@ -226,6 +294,21 @@ class Agent:
                     and tests_passed
                     and tests_run_after_latest_edit
                     and diff_inspected
+                    and (
+                        not counters["probe_attempted_after_latest_edit"]
+                        or counters["probe_passed_after_latest_edit"]
+                    )
+                    and (
+                        self.prompt_variant != "red-green-probe-v1"
+                        or (
+                            counters["red_probe_recorded"]
+                            and counters["green_probe_passed"]
+                        )
+                    )
+                    and (
+                        self.prompt_variant != "dual-checkout-probe-v1"
+                        or counters["paired_probe_passed_after_latest_edit"]
+                    )
                 )
                 metrics = AgentMetrics(**counters)
                 writer.record(
@@ -240,6 +323,13 @@ class Agent:
                         "diff_inspected": diff_inspected,
                         "non_empty_diff": diff_inspected,
                         "test_files_modified": counters["test_files_modified"],
+                        "probe_attempted_after_latest_edit": counters["probe_attempted_after_latest_edit"],
+                        "probe_passed_after_latest_edit": counters["probe_passed_after_latest_edit"],
+                        "red_probe_recorded": counters["red_probe_recorded"],
+                        "green_probe_passed": counters["green_probe_passed"],
+                        "red_probe_sha256": red_probe_sha256,
+                        "paired_probe_passed_after_latest_edit": counters["paired_probe_passed_after_latest_edit"],
+                        "paired_probe_sha256": paired_probe_sha256,
                     },
                     metrics=metrics.as_dict(),
                 )
@@ -255,7 +345,23 @@ class Agent:
                 consecutive_inspections,
             )
             if restriction is None:
-                result = self.tools.execute(name, arguments)
+                if (
+                    self.prompt_variant == "red-green-probe-v1"
+                    and name == "run_probe"
+                    and patch_applied
+                    and (
+                        red_probe_code is None
+                        or arguments.get("code") != red_probe_code
+                    )
+                ):
+                    result = ToolResult(
+                        False,
+                        "Post-edit probe must exactly replay the first failing "
+                        "pre-edit assertion; no qualifying baseline or code mismatch.",
+                        {"reason": "probe_code_mismatch"},
+                    )
+                else:
+                    result = self.tools.execute(name, arguments)
             else:
                 result = ToolResult(False, restriction)
                 counters["budget_blocked_actions"] += 1
@@ -270,7 +376,16 @@ class Agent:
                 consecutive_inspections += 1
             else:
                 consecutive_inspections = 0
-            if not result.ok:
+            expected_red = (
+                self.prompt_variant == "red-green-probe-v1"
+                and name == "run_probe"
+                and not patch_applied
+                and red_probe_code is None
+                and not result.ok
+                and result.data.get("outcome") == "assertion_failed"
+                and isinstance(arguments.get("code"), str)
+            )
+            if not result.ok and not expected_red:
                 counters["tool_failures"] += 1
             if name in {"apply_patch", "replace_text"}:
                 edit_kind = "patch" if name == "apply_patch" else "replace_text"
@@ -284,6 +399,11 @@ class Agent:
                     patch_applied = True
                     tests_passed = False
                     tests_run_after_latest_edit = False
+                    counters["probe_attempted_after_latest_edit"] = False
+                    counters["probe_passed_after_latest_edit"] = False
+                    counters["green_probe_passed"] = False
+                    counters["paired_probe_passed_after_latest_edit"] = False
+                    paired_probe_sha256 = None
                     diff_inspected = False
                 elif result.data.get("reason") == "protected_test_file":
                     counters["protected_edit_attempts"] += 1
@@ -291,6 +411,55 @@ class Agent:
                 tests_passed = result.ok
                 if patch_applied:
                     tests_run_after_latest_edit = True
+            elif name == "run_probe":
+                counters["probe_attempts"] += 1
+                if result.ok:
+                    counters["probe_successes"] += 1
+                if result.data.get("reason") == "probe_code_mismatch":
+                    counters["probe_mismatch_attempts"] += 1
+                if expected_red:
+                    red_probe_code = arguments["code"]
+                    red_probe_sha256 = hashlib.sha256(
+                        red_probe_code.encode("utf-8")
+                    ).hexdigest()
+                    counters["red_probe_recorded"] = True
+                    writer.record(
+                        "probe_red_recorded", step=step,
+                        code_sha256=red_probe_sha256,
+                    )
+                if patch_applied:
+                    counters["probe_attempted_after_latest_edit"] = True
+                    counters["probe_passed_after_latest_edit"] = result.ok
+                    if (
+                        self.prompt_variant == "red-green-probe-v1"
+                        and result.ok
+                        and arguments.get("code") == red_probe_code
+                    ):
+                        counters["green_probe_passed"] = True
+                        writer.record(
+                            "probe_green_passed", step=step,
+                            code_sha256=red_probe_sha256,
+                        )
+            elif name == "run_probe_pair":
+                counters["paired_probe_attempts"] += 1
+                qualified = (
+                    result.ok
+                    and result.data.get("red_green") is True
+                    and result.data.get("baseline_unchanged") is True
+                    and result.data.get("baseline_outcome") == "assertion_failed"
+                    and result.data.get("candidate_outcome") == "passed"
+                )
+                if qualified:
+                    counters["paired_probe_successes"] += 1
+                if patch_applied:
+                    counters["paired_probe_passed_after_latest_edit"] = qualified
+                    paired_probe_sha256 = result.data.get("code_sha256") if qualified else None
+                    if qualified:
+                        writer.record(
+                            "paired_probe_verified", step=step,
+                            code_sha256=paired_probe_sha256,
+                            base_commit=result.data.get("base_commit"),
+                        )
             elif name == "git_diff":
                 self._record_diff_metrics(counters, result)
                 if result.ok and patch_applied:
@@ -308,17 +477,32 @@ class Agent:
                         "tests_passed_after_latest_edit": tests_passed,
                         "tests_run_after_latest_edit": tests_run_after_latest_edit,
                         "diff_inspected_after_latest_edit": diff_inspected,
+                        "probe_attempted_after_latest_edit": counters["probe_attempted_after_latest_edit"],
+                        "probe_passed_after_latest_edit": counters["probe_passed_after_latest_edit"],
+                        "paired_probe_passed_after_latest_edit": counters["paired_probe_passed_after_latest_edit"],
                         "edit_deadline": self.edit_deadline,
                         "consecutive_inspections": consecutive_inspections,
                     },
-                    "next_priority": self._next_priority(
-                        patch_applied,
-                        counters["edit_attempts"] > 0,
-                        tests_passed,
-                        diff_inspected,
-                        remaining,
-                        step,
-                        self.edit_deadline,
+                    "next_priority": (
+                        "Use run_probe_pair to obtain an original-fail/current-pass assertion "
+                        "for the reported issue after the latest edit."
+                        if self.prompt_variant == "dual-checkout-probe-v1"
+                        and patch_applied and tests_passed
+                        and not counters["paired_probe_passed_after_latest_edit"]
+                        else
+                        "The post-edit issue probe failed. Recheck its assertion and "
+                        "the fix; do not claim verification until a fresh probe passes."
+                        if counters["probe_attempted_after_latest_edit"]
+                        and not counters["probe_passed_after_latest_edit"]
+                        else self._next_priority(
+                            patch_applied,
+                            counters["edit_attempts"] > 0,
+                            tests_passed,
+                            diff_inspected,
+                            remaining,
+                            step,
+                            self.edit_deadline,
+                        )
                     ),
                 },
                 ensure_ascii=False,

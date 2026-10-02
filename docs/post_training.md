@@ -127,6 +127,49 @@ environment errors; strict SFT export accepted none. Those tasks remain open,
 and the eight-sample corpus is unchanged. See the correction smoke and
 remaining-eight audits in `experiments/training_pool_v1_deepseek/`.
 
+A subsequent two-case train-only prompt smoke added an opt-in
+`behavior-contract-v1` system prompt while leaving the default unchanged. Both
+Agent-verified patches remained officially unresolved (0/2); all four
+issue-target tests across the two cases still failed. No new strict SFT example
+or exact-prompt preference pair was added. The run is documented in
+`v053_behavior_contract_smoke_audit.json` under the same experiments directory.
+
+An opt-in Docker-only `run_probe` experiment followed on the same two train
+cases. It runs a model-written Python assertion with the checkout mounted
+read-only, no network, and bounded resources; the fixed public regression test
+remains mandatory for Agent verification. Pydicom used and passed two probes,
+but still failed all three official target tests. SQLFluff did not use the probe,
+failed a public regression, and also remained officially unresolved. The
+official result was again 0/2; no training data was added. See
+`v054_behavior_probe_smoke_audit.json`.
+
+The next opt-in `red-green-probe-v1` freezes the first genuine pre-edit
+assertion failure and only accepts the exact same code as a post-edit green
+probe. It distinguishes assertion failure from import/runtime errors. On the
+same two train cases, pydicom achieved Agent-side red-green verification but
+failed all three official target tests; SQLFluff was officially resolved but
+had edited before establishing a red baseline, so it failed the opt-in Agent
+quality gate. Official resolution was 1/2, but strict SFT export accepted 0/2
+(`official_unresolved`: 1, `not_verified`: 1). The eight-sample accepted corpus
+is unchanged. See `v055_red_green_probe_smoke_audit.json`; a single sampled run
+cannot establish that this prompt variant caused the official improvement.
+
+The opt-in `dual-checkout-probe-v1` then introduced `run_probe_pair`: a separate
+base checkout is created before the Agent edits, and identical code is executed
+on original and current checkouts in read-only offline containers. Baseline HEAD
+and cleanliness (including untracked/ignored files) are checked before and after
+each pair. Only original assertion failure/current pass qualifies; any further
+edit invalidates the evidence. Both smoke cases used probes after editing and
+obtained qualifying pairs, with both original checkouts still clean afterward.
+Official grading remained 1/2, zero errors. Pydicom passed its narrow probes but
+failed all three official target tests and had two invalid actions. SQLFluff
+passed official grading, but its base-checkout public regression expected
+duplicates and failed after deduplication; the Agent exhausted its budget.
+Strict export accepted 0/2 (`too_many_invalid_actions`: 1, `not_verified`: 1;
+only the first rejection gate is reported). The accepted corpus remains eight
+samples. Audit: `v056_dual_checkout_probe_smoke_audit.json`. Next investigate
+the local/official test-oracle mismatch before changing any quality gate.
+
 Reproduce the two audits:
 
 ```bash

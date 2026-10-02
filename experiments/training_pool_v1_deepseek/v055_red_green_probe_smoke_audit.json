@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "run_id": "v055-red-green-probe-smoke-r1",
+  "scope": "two preselected SWE-bench train failures; opt-in same-assertion red-green probe experiment",
+  "manifest": "benchmarks/training_pool_v1/manifest_train_behavior_contract_smoke.jsonl",
+  "manifest_sha256": "cdbe822561a1cb2d4aafdf49f1e4d6d216838b0cb49a789b38e17e6306c2fce6",
+  "model_request_name": "deepseek-v4-flash",
+  "thinking_mode": "disabled",
+  "temperature": 0.3,
+  "prompt_variant": "red-green-probe-v1",
+  "predictions_sha256": "dd0ded045c24c700be5b3292b38ea0cb582cc7402437c73672afefb5acabb53a",
+  "generation": {
+    "completed": 2,
+    "errors": 0,
+    "patch_generated": 2,
+    "agent_verified": 1,
+    "probe_attempts": 5,
+    "probe_successes": 2,
+    "probe_mismatch_attempts": 2,
+    "invalid_actions": 1,
+    "tool_failures": 7,
+    "average_steps": 24.5,
+    "average_duration_seconds": 35.038
+  },
+  "official": {
+    "harness_version": "4.1.0",
+    "dataset": "princeton-nlp/SWE-bench",
+    "split": "dev",
+    "resolved": 1,
+    "unresolved": 1,
+    "errors": 0,
+    "empty_patches": 0,
+    "report_sha256": "1a9ea9c769290f7a8c80241e8a0f61ba2fc309cfbde274ecf48c79dd60d5342b"
+  },
+  "cases": [
+    {
+      "instance_id": "pydicom__pydicom-816",
+      "red_green_same_assertion": true,
+      "agent_verified": true,
+      "official_status": "unresolved",
+      "target_tests_passed": 0,
+      "target_tests_total": 3,
+      "public_regressions_failed": 0,
+      "observation": "The frozen probe checked only convert_encodings(['Not Supplied']) == ['iso8859']; it turned green, but all three official target tests still failed."
+    },
+    {
+      "instance_id": "sqlfluff__sqlfluff-4041",
+      "red_green_same_assertion": false,
+      "agent_verified": false,
+      "official_status": "resolved",
+      "target_tests_passed": 1,
+      "target_tests_total": 1,
+      "public_regressions_failed": 0,
+      "observation": "The Agent first edited at step 11, then attempted two probes without a pre-edit red baseline; the opt-in red-green gate rejected those probes, although the official patch passed."
+    }
+  ],
+  "strict_sft_export": {
+    "accepted_samples": 0,
+    "rejected_samples": 2,
+    "rejection_reasons": {
+      "not_verified": 1,
+      "official_unresolved": 1
+    },
+    "report_sha256": "132c6a3be839df8b2842d07ce495205d24f3653dae84ec9dc4a0be4a9466c01a"
+  },
+  "conclusion": "The mechanism enforces a genuine same-assertion red-green transition. Official resolution was 1/2, but neither trajectory passed both official and strict Agent-quality gates, so the accepted train corpus is unchanged.",
+  "limitations": [
+    "One stochastic sample per task and an unpinned provider revision do not establish a causal improvement over earlier 0/2 runs.",
+    "A red-green probe can be too narrow; it does not replace issue-target or regression tests.",
+    "A patch can be officially resolved even if the opt-in pre-edit probe protocol was not followed.",
+    "The new initial prompt does not exactly match earlier failed trajectories, so this run cannot create a valid same-prompt preference pair with them.",
+    "Official target tests were used only for post-hoc grading, not shown to the Agent."
+  ]
+}

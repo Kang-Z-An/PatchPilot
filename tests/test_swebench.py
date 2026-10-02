@@ -5,8 +5,11 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from patchpilot.swebench import SWEBenchInstance, SWEBenchRunner, load_instance
+from patchpilot.docker import DockerTestRunner
+from patchpilot.types import ToolResult
 
 
 class ScriptedModel:
@@ -18,6 +21,43 @@ class ScriptedModel:
 
 
 class SWEBenchTest(unittest.TestCase):
+    def test_dual_runner_creates_independent_base_before_edit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            source.mkdir()
+            (source / "calc.py").write_text("x = 1\n")
+            self._git(source, "init", "-q")
+            self._git(source, "add", ".")
+            self._git(source, "-c", "user.name=Test", "-c", "user.email=test@example.org", "commit", "-qm", "base")
+            commit = self._git(source, "rev-parse", "HEAD").stdout.strip()
+            seen = []
+
+            def probe(runner, code, **kwargs):
+                text = (runner.repository / "calc.py").read_text()
+                seen.append((runner.repository, code, kwargs))
+                passed = text == "x = 2\n"
+                return ToolResult(passed, text, {"outcome": "passed" if passed else "assertion_failed"})
+
+            model = ScriptedModel([
+                {"tool": "replace_text", "arguments": {"path": "calc.py", "old_text": "x = 1", "new_text": "x = 2"}},
+                {"tool": "run_probe_pair", "arguments": {"code": "from calc import x\nassert x == 2"}},
+                {"tool": "run_tests", "arguments": {}},
+                {"final": "Fixed."},
+            ])
+            with patch.object(DockerTestRunner, "run_probe", probe), patch.object(DockerTestRunner, "run", return_value=ToolResult(True, "passed")):
+                result = SWEBenchRunner(
+                    model, "scripted", root / "results", "unused", max_steps=8,
+                    docker_image="image", prompt_variant="dual-checkout-probe-v1",
+                ).run(SWEBenchInstance("example__repo-2", "example/repo", commit[:8], "x should be 2"), source)
+            self.assertTrue(result.agent_verified)
+            baseline = Path(result.baseline_repository_path)
+            self.assertEqual((baseline / "calc.py").read_text(), "x = 1\n")
+            self.assertEqual(result.baseline_commit, commit)
+            self.assertEqual(self._git(baseline, "status", "--porcelain", "--ignored").stdout, "")
+            self.assertFalse(baseline.is_relative_to(Path(result.repository_path)))
+            self.assertEqual(seen[0][1:], seen[1][1:])
+
     def test_loads_one_instance_from_jsonl(self) -> None:
         record = {
             "instance_id": "example__repo-1",

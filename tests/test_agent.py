@@ -8,6 +8,7 @@ from pathlib import Path
 
 from patchpilot.agent import Agent
 from patchpilot.tools import RepositoryTools
+from patchpilot.types import ToolResult
 
 
 class ScriptedModel:
@@ -19,6 +20,214 @@ class ScriptedModel:
 
 
 class AgentEndToEndTest(unittest.TestCase):
+    def test_dual_probe_allows_edit_first_but_requires_fresh_pair_and_tests(self) -> None:
+        edit = {"tool": "replace_text", "arguments": {
+            "path": "maths.py", "old_text": "return a - b", "new_text": "return a + b",
+        }}
+        pair = {"tool": "run_probe_pair", "arguments": {"code": "assert add(2, 3) == 5"}}
+        tests = {"tool": "run_tests", "arguments": {}}
+        final = {"final": "Fixed."}
+        for actions, expected in (
+            ([edit, pair, tests, final], True),
+            ([edit, pair, final], False),
+            ([edit, tests, final], False),
+            ([edit, pair, {"tool": "replace_text", "arguments": {
+                "path": "maths.py", "old_text": "return a + b", "new_text": "return b + a",
+            }}, tests, final], False),
+        ):
+            with self.subTest(actions=actions), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+                (root / "maths.py").write_text("def add(a, b):\n    return a - b\n")
+                result = Agent(
+                    ScriptedModel(actions), RepositoryTools(
+                        root, "python -c 'pass'", paired_probe_runner=lambda code: ToolResult(True, "red/green", {
+                            "red_green": True, "baseline_unchanged": True,
+                            "baseline_outcome": "assertion_failed", "candidate_outcome": "passed",
+                            "code_sha256": "hash", "base_commit": "base",
+                        }),
+                    ), root / "traces", max_steps=8, prompt_variant="dual-checkout-probe-v1",
+                ).run("add should add")
+                self.assertEqual(result.success, expected)
+                events = [json.loads(line) for line in result.trajectory_path.read_text().splitlines()]
+                self.assertIn("run_probe_pair", events[0]["initial_messages"][0]["content"])
+                if pair in actions:
+                    self.assertEqual(result.metrics.paired_probe_successes, 1)
+
+    def test_red_green_requires_same_assertion_before_and_after_edit(self) -> None:
+        code = "from maths import add\nassert add(2, 3) == 5"
+        model = ScriptedModel([
+            {"tool": "run_probe", "arguments": {"code": code}},
+            {"tool": "replace_text", "arguments": {
+                "path": "maths.py", "old_text": "return a - b", "new_text": "return a + b",
+            }},
+            {"tool": "run_probe", "arguments": {"code": code}},
+            {"tool": "run_tests", "arguments": {}},
+            {"tool": "git_diff", "arguments": {}},
+            {"final": "Fixed and verified."},
+        ])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            source = root / "maths.py"
+            source.write_text("def add(a, b):\n    return a - b\n", encoding="utf-8")
+
+            def probe(_code: str) -> ToolResult:
+                if "return a - b" in source.read_text(encoding="utf-8"):
+                    return ToolResult(
+                        False, "AssertionError", {"outcome": "assertion_failed"}
+                    )
+                return ToolResult(True, "Probe assertions passed", {"outcome": "passed"})
+
+            result = Agent(
+                model,
+                RepositoryTools(root, "python -c 'pass'", probe_runner=probe),
+                root / "traces", max_steps=6, prompt_variant="red-green-probe-v1",
+            ).run("add should add")
+            events = [json.loads(line) for line in result.trajectory_path.read_text().splitlines()]
+
+        self.assertTrue(result.success)
+        self.assertTrue(result.metrics.red_probe_recorded)
+        self.assertTrue(result.metrics.green_probe_passed)
+        self.assertEqual(result.metrics.tool_failures, 0)
+        hashes = [
+            event["code_sha256"] for event in events
+            if event["event"] in {"probe_red_recorded", "probe_green_passed"}
+        ]
+        self.assertEqual(len(hashes), 2)
+        self.assertEqual(hashes[0], hashes[1])
+
+    def test_red_green_rejects_changed_post_edit_assertion(self) -> None:
+        red_code = "assert False"
+        calls: list[str] = []
+        model = ScriptedModel([
+            {"tool": "run_probe", "arguments": {"code": red_code}},
+            {"tool": "replace_text", "arguments": {
+                "path": "maths.py", "old_text": "return a - b", "new_text": "return a + b",
+            }},
+            {"tool": "run_probe", "arguments": {"code": "assert True"}},
+            {"tool": "run_tests", "arguments": {}},
+            {"tool": "git_diff", "arguments": {}},
+            {"final": "Fixed."},
+        ])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            (root / "maths.py").write_text("def add(a, b):\n    return a - b\n", encoding="utf-8")
+
+            def probe(code: str) -> ToolResult:
+                calls.append(code)
+                return ToolResult(False, "AssertionError", {"outcome": "assertion_failed"})
+
+            result = Agent(
+                model,
+                RepositoryTools(root, "python -c 'pass'", probe_runner=probe),
+                root / "traces", max_steps=6, prompt_variant="red-green-probe-v1",
+            ).run("add should add")
+
+        self.assertFalse(result.success)
+        self.assertEqual(calls, [red_code])
+        self.assertEqual(result.metrics.probe_mismatch_attempts, 1)
+        self.assertFalse(result.metrics.green_probe_passed)
+
+    def test_failed_post_edit_probe_prevents_agent_verified_status(self) -> None:
+        model = ScriptedModel([
+            {"tool": "replace_text", "arguments": {
+                "path": "maths.py", "old_text": "return a - b", "new_text": "return a + b",
+            }},
+            {"tool": "run_tests", "arguments": {}},
+            {"tool": "run_probe", "arguments": {"code": "assert False"}},
+            {"tool": "git_diff", "arguments": {}},
+            {"final": "Fixed."},
+        ])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            (root / "maths.py").write_text("def add(a, b):\n    return a - b\n", encoding="utf-8")
+            result = Agent(
+                model,
+                RepositoryTools(
+                    root, "python -c 'pass'",
+                    probe_runner=lambda code: ToolResult(False, "AssertionError"),
+                ),
+                root / "traces", max_steps=5, prompt_variant="behavior-probe-v1",
+            ).run("add should add")
+
+        self.assertFalse(result.success)
+        self.assertTrue(result.metrics.tests_run_after_latest_edit)
+        self.assertTrue(result.metrics.probe_attempted_after_latest_edit)
+        self.assertFalse(result.metrics.probe_passed_after_latest_edit)
+
+    def test_probe_is_traced_but_cannot_replace_fixed_tests(self) -> None:
+        model = ScriptedModel([
+            {"tool": "run_probe", "arguments": {"code": "assert 1 == 1"}},
+            {"tool": "replace_text", "arguments": {
+                "path": "maths.py", "old_text": "return a - b", "new_text": "return a + b",
+            }},
+            {"tool": "run_probe", "arguments": {"code": "assert 1 == 1"}},
+            {"tool": "git_diff", "arguments": {}},
+            {"final": "Probe passed."},
+        ])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            (root / "maths.py").write_text("def add(a, b):\n    return a - b\n", encoding="utf-8")
+            tools = RepositoryTools(
+                root, "python -m unittest -q",
+                probe_runner=lambda code: ToolResult(True, "Probe assertions passed"),
+            )
+            result = Agent(
+                model, tools, root / "traces", max_steps=5,
+                prompt_variant="behavior-probe-v1",
+            ).run("add should add")
+            events = [json.loads(line) for line in result.trajectory_path.read_text().splitlines()]
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.metrics.probe_attempts, 2)
+        self.assertEqual(result.metrics.probe_successes, 2)
+        self.assertTrue(result.metrics.probe_passed_after_latest_edit)
+        self.assertFalse(result.metrics.tests_run_after_latest_edit)
+        self.assertIn("run_probe", events[0]["initial_messages"][0]["content"])
+
+    def test_behavior_contract_prompt_is_opt_in_and_recorded(self) -> None:
+        class CaptureModel:
+            def __init__(self) -> None:
+                self.messages: list[dict[str, str]] | None = None
+
+            def complete(self, messages: list[dict[str, str]]) -> str:
+                self.messages = messages
+                return json.dumps({"final": "No edit attempted."})
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            model = CaptureModel()
+            result = Agent(
+                model,
+                RepositoryTools(root, "python -m unittest -q"),
+                root / "traces",
+                max_steps=1,
+                prompt_variant="behavior-contract-v1",
+            ).run("Example issue")
+            started = json.loads(result.trajectory_path.read_text().splitlines()[0])
+            default_model = CaptureModel()
+            default_result = Agent(
+                default_model,
+                RepositoryTools(root, "python -m unittest -q"),
+                root / "default-traces",
+                max_steps=1,
+            ).run("Example issue")
+            default_started = json.loads(
+                default_result.trajectory_path.read_text().splitlines()[0]
+            )
+
+        assert model.messages is not None
+        assert default_model.messages is not None
+        self.assertIn("short behavior contract", model.messages[0]["content"])
+        self.assertEqual(started["prompt_variant"], "behavior-contract-v1")
+        self.assertNotIn("short behavior contract", default_model.messages[0]["content"])
+        self.assertEqual(default_started["prompt_variant"], "default")
+
     def test_first_edit_deadline_blocks_continued_inspection(self) -> None:
         model = ScriptedModel([
             *[

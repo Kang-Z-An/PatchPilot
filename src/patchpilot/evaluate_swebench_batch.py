@@ -5,6 +5,7 @@ import json
 from importlib import metadata
 from pathlib import Path
 
+from .agent import PROMPT_VARIANTS
 from .cli import load_model_config
 from .model import OpenAICompatibleModel
 from .swebench_batch import (
@@ -51,6 +52,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--thinking-mode",
         choices=("enabled", "disabled"),
         help="Optional DeepSeek thinking switch; omitted by default",
+    )
+    parser.add_argument(
+        "--prompt-variant",
+        choices=PROMPT_VARIANTS,
+        default="default",
+        help="Agent system-prompt variant; recorded for resume",
     )
     parser.add_argument("--env-file", type=Path, default=Path(".env"))
     parser.add_argument(
@@ -145,6 +152,7 @@ def main(argv: list[str] | None = None) -> int:
             docker_pids_limit=args.docker_pids_limit,
             temperature=args.temperature,
             thinking_mode=args.thinking_mode,
+            prompt_variant=args.prompt_variant,
         )
         summary, summary_path = runner.generate(resume=args.resume)
         run_dir = summary_path.parent

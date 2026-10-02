@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from .agent import AgentMetrics
+from .agent import AgentMetrics, PROMPT_VARIANTS
 from .swebench import SWEBenchRunner, load_instance
 from .types import Model
 
@@ -35,6 +35,11 @@ _COUNT_METRICS = (
     "protected_edit_attempts",
     "empty_diff_attempts",
     "test_files_modified",
+    "probe_attempts",
+    "probe_successes",
+    "probe_mismatch_attempts",
+    "paired_probe_attempts",
+    "paired_probe_successes",
 )
 
 
@@ -382,16 +387,24 @@ class SWEBenchBatchRunner:
         docker_pids_limit: int = 512,
         temperature: float = 0.0,
         thinking_mode: str | None = None,
+        prompt_variant: str = "default",
     ) -> None:
         if not 0 <= temperature <= 2:
             raise ValueError("temperature must be between 0 and 2")
         if thinking_mode not in {None, "enabled", "disabled"}:
             raise ValueError("thinking_mode must be enabled, disabled, or unset")
+        if prompt_variant not in PROMPT_VARIANTS:
+            raise ValueError(f"Unknown prompt variant: {prompt_variant}")
         self.model = model
         self.model_name = model_name
         self.temperature = temperature
         self.thinking_mode = thinking_mode
+        self.prompt_variant = prompt_variant
         self.cases = [case for case in cases if case.enabled]
+        if prompt_variant in {"red-green-probe-v1", "dual-checkout-probe-v1"} and any(
+            case.docker_image is None for case in self.cases
+        ):
+            raise ValueError(f"{prompt_variant} requires Docker images for all cases")
         self.results_dir = results_dir.resolve()
         self.docker_platform = docker_platform
         self.docker_cpus = docker_cpus
@@ -469,6 +482,10 @@ class SWEBenchBatchRunner:
                 raise ValueError(
                     "Current thinking mode does not match the resumed run"
                 )
+            if metadata.get("prompt_variant", "default") != self.prompt_variant:
+                raise ValueError(
+                    "Current prompt variant does not match the resumed run"
+                )
             return
         (self.run_dir / "cases").mkdir(parents=True, exist_ok=False)
         (self.run_dir / "artifacts").mkdir()
@@ -481,6 +498,7 @@ class SWEBenchBatchRunner:
                 "model": self.model_name,
                 "temperature": self.temperature,
                 "thinking_mode": self.thinking_mode,
+                "prompt_variant": self.prompt_variant,
                 "created_at": datetime.now(timezone.utc).isoformat(),
             },
         )
@@ -508,6 +526,7 @@ class SWEBenchBatchRunner:
                 docker_memory=self.docker_memory,
                 docker_pids_limit=self.docker_pids_limit,
                 protect_test_files=case.protect_test_files,
+                prompt_variant=self.prompt_variant,
             )
             result = runner.run(instance, case.source_repo)
             return SWEBenchBatchCaseResult(
@@ -898,6 +917,39 @@ def build_batch_summary(
                     if result is not None
                     else False
                 ),
+                "probe_attempts": (
+                    int(result.metrics.get("probe_attempts", 0))
+                    if result is not None
+                    else 0
+                ),
+                "probe_attempted_after_latest_edit": (
+                    bool(result.metrics.get("probe_attempted_after_latest_edit", False))
+                    if result is not None
+                    else False
+                ),
+                "probe_passed_after_latest_edit": (
+                    bool(result.metrics.get("probe_passed_after_latest_edit", False))
+                    if result is not None
+                    else False
+                ),
+                "red_probe_recorded": (
+                    bool(result.metrics.get("red_probe_recorded", False))
+                    if result is not None
+                    else False
+                ),
+                "paired_probe_attempts": (
+                    int(result.metrics.get("paired_probe_attempts", 0))
+                    if result is not None else 0
+                ),
+                "paired_probe_passed_after_latest_edit": (
+                    bool(result.metrics.get("paired_probe_passed_after_latest_edit", False))
+                    if result is not None else False
+                ),
+                "green_probe_passed": (
+                    bool(result.metrics.get("green_probe_passed", False))
+                    if result is not None
+                    else False
+                ),
             }
         )
     total = len(cases)
@@ -946,6 +998,9 @@ def build_batch_summary(
             ),
             "runs_tested_after_latest_edit": fresh_test_runs,
             "test_freshness_rate": _rate(fresh_test_runs, len(completed)),
+            "paired_probe_success_rate": _rate(
+                metric_totals["paired_probe_successes"], metric_totals["paired_probe_attempts"]
+            ),
         },
         "official": {
             "status": official_result.status if official_result is not None else "pending",

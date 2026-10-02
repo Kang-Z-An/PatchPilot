@@ -58,6 +58,20 @@ class NeverCalledModel:
 
 
 class SWEBenchBatchTest(unittest.TestCase):
+    def test_red_green_variant_requires_docker_before_generation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cases = self._make_manifest(root)
+            for variant in ("red-green-probe-v1", "dual-checkout-probe-v1"):
+                with self.subTest(variant=variant), self.assertRaisesRegex(ValueError, "requires Docker images"):
+                    SWEBenchBatchRunner(
+                        model=NeverCalledModel(),
+                        model_name="scripted-model",
+                        cases=cases,
+                        results_dir=root / "results",
+                        prompt_variant=variant,
+                    )
+
     def test_cli_fails_before_model_loading_when_official_harness_is_missing(
         self,
     ) -> None:
@@ -214,6 +228,17 @@ class SWEBenchBatchTest(unittest.TestCase):
             )
             with self.assertRaisesRegex(ValueError, "thinking mode does not match"):
                 wrong_thinking.generate(resume=True)
+
+            wrong_prompt = SWEBenchBatchRunner(
+                model=NeverCalledModel(),
+                model_name="scripted-model",
+                cases=cases,
+                results_dir=root / "results",
+                run_dir=run_dir,
+                prompt_variant="behavior-contract-v1",
+            )
+            with self.assertRaisesRegex(ValueError, "prompt variant does not match"):
+                wrong_prompt.generate(resume=True)
 
             Path(case_result["predictions_path"]).unlink()
             recovered = SWEBenchBatchRunner(
